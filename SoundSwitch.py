@@ -285,10 +285,21 @@ class HotkeySettingsDialog(QDialog):
         layout.addLayout(btn_row)
 
     def _apply(self):
+        # Replace empty fields with their default before saving
+        for key_id, edit in self._captures.items():
+            if not edit.text().strip():
+                edit.setText(self.DEFAULT_HOTKEYS[key_id])
         hotkeys = {key_id: edit.text() for key_id, edit in self._captures.items()}
+        old_hotkeys = self.state.get('hotkeys')
+        old_step = self.state.get('volume_step')
         self.state['hotkeys'] = hotkeys
         self.state['volume_step'] = self._step_spin.value()
-        self.on_apply(hotkeys, self._step_spin.value())
+        try:
+            self.on_apply(hotkeys, self._step_spin.value())
+        except Exception:
+            self.state['hotkeys'] = old_hotkeys
+            self.state['volume_step'] = old_step
+            raise
         self.accept()
 
     def _reset(self):
