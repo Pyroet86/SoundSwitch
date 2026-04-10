@@ -507,6 +507,12 @@ class MainWindow(QMainWindow):
         self.apply_dark_theme()
         self.statusBar().showMessage('Ready')
         self.init_tray_icon()
+        self._shortcuts_manager = GlobalShortcutsManager(self)
+        if self._shortcuts_manager.start():
+            self._shortcuts_manager.shortcut_activated.connect(self._on_shortcut_activated)
+            self._shortcuts_manager.bind_shortcuts(self.state.get('hotkeys', {}))
+        else:
+            self.show_status('Global hotkeys unavailable: xdg-desktop-portal-kde not running', error=True)
         if start_minimized:
             self.hide_to_tray()
 
@@ -515,6 +521,9 @@ class MainWindow(QMainWindow):
         menubar.setNativeMenuBar(False)
         menubar.setStyleSheet('QMenuBar { background: #232629; color: #f0f0f0; } QMenuBar::item:selected { background: #005f87; } QMenu { background: #232629; color: #f0f0f0; } QMenu::item:selected { background: #005f87; }')
         file_menu = menubar.addMenu('File')
+        hotkey_action = file_menu.addAction('Hotkey Settings\u2026')
+        hotkey_action.triggered.connect(self.open_hotkey_settings)
+        file_menu.addSeparator()
         exit_action = file_menu.addAction('Exit')
         exit_action.triggered.connect(self.close)
         self.setMenuBar(menubar)
@@ -1062,6 +1071,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.save_state()
+        if hasattr(self, '_shortcuts_manager'):
+            self._shortcuts_manager.stop()
         if self.tray_icon:
             self.tray_icon.hide()
         super().closeEvent(event)
@@ -1083,6 +1094,22 @@ class MainWindow(QMainWindow):
         delta = f'+{step}%' if direction == 'up' else f'-{step}%'
         self.run_pactl(['set-sink-volume', sink_name, delta])
         self.show_status(f'{sink_name} volume {direction} ({delta})')
+
+    def _on_shortcut_activated(self, shortcut_id):
+        parts = shortcut_id.rsplit('_', 1)
+        if len(parts) != 2:
+            return
+        sink_name, direction = parts
+        if sink_name not in CUSTOM_SINKS or direction not in ('up', 'down'):
+            return
+        self.set_sink_volume(sink_name, direction)
+
+    def open_hotkey_settings(self):
+        def on_apply(hotkeys, step):
+            self.save_state()
+            self._shortcuts_manager.rebind(hotkeys)
+            self.show_status('Hotkey settings saved.')
+        HotkeySettingsDialog(self.state, on_apply, parent=self).exec_()
 
 if __name__ == '__main__':
     import argparse
