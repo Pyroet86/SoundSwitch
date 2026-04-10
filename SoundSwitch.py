@@ -780,6 +780,12 @@ class MainWindow(QMainWindow):
             self.show_status(f'Failed to move stream #{sink_input_index} to sink {sink_name}', error=True)
         self.refresh_devices_and_sinks(force=True)
 
+    def set_sink_volume(self, sink_name, direction):
+        step = self.state.get('volume_step', 5)
+        delta = f'+{step}%' if direction == 'up' else f'-{step}%'
+        self.run_pactl(['set-sink-volume', sink_name, delta])
+        self.show_status(f'{sink_name} volume {direction} ({delta})')
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
