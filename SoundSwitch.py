@@ -353,6 +353,7 @@ class GlobalShortcutsManager(QtCore.QObject):
         self._glib_loop = None
         self._available = False
         self._pending_hotkeys = None
+        self._pending_version = 0
 
     def start(self):
         """Connect to the portal, create a session, and start the GLib event loop.
@@ -419,21 +420,24 @@ class GlobalShortcutsManager(QtCore.QObject):
             path=self.PORTAL_PATH,
         )
         if self._pending_hotkeys is not None:
-            self.bind_shortcuts(self._pending_hotkeys)
+            self.bind_shortcuts(self._pending_hotkeys, self._pending_version)
 
-    def bind_shortcuts(self, hotkeys):
+    def bind_shortcuts(self, hotkeys, version=0):
         """Register all shortcuts with the portal. hotkeys is a dict of
         {shortcut_id: Qt-format key string}, e.g. {'Game_up': 'Ctrl+Alt+1'}.
+        version is appended to each ID (e.g. 'Game_up_v1') so that changed
+        bindings are always treated as new registrations by kwin.
         If the session is not yet established, the hotkeys are queued and
         registered automatically when the session becomes ready."""
         if not self._session_handle:
             self._pending_hotkeys = hotkeys
+            self._pending_version = version
             return
         self._pending_hotkeys = None
         shortcuts = dbus.Array(
             [
                 (
-                    dbus.String(key_id),
+                    dbus.String(f'{key_id}_v{version}'),
                     dbus.Dictionary(
                         {
                             'description': dbus.String(self._description(key_id)),
@@ -455,9 +459,20 @@ class GlobalShortcutsManager(QtCore.QObject):
         )
 
 
+    @staticmethod
+    def _strip_version(shortcut_id):
+        """Remove _vN suffix: 'Game_up_v2' -> 'Game_up'."""
+        parts = shortcut_id.rsplit('_v', 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            return parts[0]
+        return shortcut_id
+
     def _description(self, key_id):
-        sink, direction = key_id.split('_', 1)
-        return f'{sink} Volume {direction.title()}'
+        """Return human-readable description for a shortcut ID (no version suffix)."""
+        clean = self._strip_version(key_id)
+        sink, direction = clean.split('_', 1)
+        arrow = '\u2191' if direction == 'up' else '\u2193'
+        return f'{sink} Volume {arrow} {direction.title()}'
 
     def _qt_to_xdg_trigger(self, qt_key):
         """Convert Qt key sequence string to XDG accelerator format.
@@ -471,15 +486,14 @@ class GlobalShortcutsManager(QtCore.QObject):
 
     def _on_activated(self, session_handle, shortcut_id, timestamp, options):
         if str(session_handle) == self._session_handle:
-            self.shortcut_activated.emit(str(shortcut_id))
+            self.shortcut_activated.emit(self._strip_version(str(shortcut_id)))
 
-    def restart(self, hotkeys):
+    def restart(self, hotkeys, version):
         """Destroy the current portal session and start a fresh one.
 
-        Creating a new session causes KDE to treat the shortcuts as new
-        registrations, so it will show its shortcut confirmation dialog with
-        the supplied preferred_trigger values pre-filled, letting the user
-        accept or adjust the new bindings.
+        Using a new version causes kwin to see the shortcut IDs as entirely
+        new registrations and apply the preferred_trigger values directly,
+        bypassing any cached bindings from the previous version.
 
         Returns True if the new session started successfully."""
         if self._glib_loop:
@@ -490,6 +504,7 @@ class GlobalShortcutsManager(QtCore.QObject):
         self._glib_loop = None
         self._available = False
         self._pending_hotkeys = hotkeys
+        self._pending_version = version
         return self.start()
 
     @property
@@ -522,6 +537,8 @@ class MainWindow(QMainWindow):
             self.state['volume_step'] = 5
         if 'hotkeys' not in self.state:
             self.state['hotkeys'] = dict(HotkeySettingsDialog.DEFAULT_HOTKEYS)
+        if 'shortcut_version' not in self.state:
+            self.state['shortcut_version'] = 0
         self._last_snapshot = None
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
@@ -540,7 +557,10 @@ class MainWindow(QMainWindow):
         self._shortcuts_manager = GlobalShortcutsManager(self)
         if self._shortcuts_manager.start():
             self._shortcuts_manager.shortcut_activated.connect(self._on_shortcut_activated)
-            self._shortcuts_manager.bind_shortcuts(self.state.get('hotkeys', GlobalShortcutsManager.DEFAULT_HOTKEYS))
+            self._shortcuts_manager.bind_shortcuts(
+                self.state.get('hotkeys', GlobalShortcutsManager.DEFAULT_HOTKEYS),
+                self.state.get('shortcut_version', 0),
+            )
         else:
             self.show_status('Global hotkeys unavailable: xdg-desktop-portal-kde not running', error=True)
         if start_minimized:
@@ -1136,11 +1156,12 @@ class MainWindow(QMainWindow):
 
     def open_hotkey_settings(self):
         def on_apply(hotkeys, step):
+            self.state['shortcut_version'] = self.state.get('shortcut_version', 0) + 1
             self.save_state()
             if self._shortcuts_manager.is_available:
-                ok = self._shortcuts_manager.restart(hotkeys)
+                ok = self._shortcuts_manager.restart(hotkeys, self.state['shortcut_version'])
                 if ok:
-                    self.show_status('Hotkey settings saved — accept the KDE shortcut dialog to activate.')
+                    self.show_status('Hotkey settings saved.')
                 else:
                     self.show_status('Settings saved — could not restart shortcut session.', error=True)
             else:
