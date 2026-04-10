@@ -164,6 +164,50 @@ class RoundedBoxDelegate(QStyledItemDelegate):
             return base.expandedTo(QtCore.QSize(base.width(), 48))
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
+class KeyCaptureEdit(QLineEdit):
+    """QLineEdit that captures a key combination on click."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._capturing = False
+        self._previous = ''
+        self.setReadOnly(True)
+        self.setPlaceholderText('Click to set hotkey')
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(
+            'QLineEdit { background: #2d2f31; color: #f0f0f0; border: 1px solid #444; '
+            'border-radius: 4px; padding: 4px 8px; }'
+            'QLineEdit:focus { border-color: #00bfff; }'
+        )
+
+    def mousePressEvent(self, event):
+        self._previous = self.text()
+        self._capturing = True
+        self.setText('Press keys\u2026')
+        self.setFocus()
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if not self._capturing:
+            return
+        key = event.key()
+        if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt,
+                   Qt.Key_Meta, Qt.Key_AltGr):
+            return  # ignore modifier-only presses
+        if key == Qt.Key_Escape:
+            self.setText(self._previous)
+            self._capturing = False
+            return
+        seq = QKeySequence(int(event.modifiers()) | key)
+        self.setText(seq.toString())
+        self._capturing = False
+
+    def focusOutEvent(self, event):
+        if self._capturing:
+            self.setText(self._previous)
+            self._capturing = False
+        super().focusOutEvent(event)
+
 class MainWindow(QMainWindow):
     def __init__(self, start_minimized=False):
         super().__init__()
