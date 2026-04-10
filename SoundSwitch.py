@@ -307,6 +307,131 @@ class HotkeySettingsDialog(QDialog):
             edit.setText(self.DEFAULT_HOTKEYS[key_id])
         self._step_spin.setValue(5)
 
+_dbus_main_loop_initialized = False
+
+
+class GlobalShortcutsManager(QtCore.QObject):
+    """Registers and handles global shortcuts via the XDG GlobalShortcuts portal."""
+
+    shortcut_activated = QtCore.pyqtSignal(str)  # emits shortcut_id
+
+    PORTAL_BUS   = 'org.freedesktop.portal.Desktop'
+    PORTAL_PATH  = '/org/freedesktop/portal/desktop'
+    PORTAL_IFACE = 'org.freedesktop.portal.GlobalShortcuts'
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bus = None
+        self._portal = None
+        self._session_handle = None
+        self._glib_loop = None
+        self._available = False
+
+    def start(self):
+        """Connect to the portal, create a session, and start the GLib event loop.
+        Returns True on success, False if the portal is unavailable."""
+        global _dbus_main_loop_initialized
+        if not DBUS_AVAILABLE:
+            return False
+        try:
+            if not _dbus_main_loop_initialized:
+                DBusGMainLoop(set_as_default=True)
+                _dbus_main_loop_initialized = True
+            self._bus = dbus.SessionBus()
+            self._portal = dbus.Interface(
+                self._bus.get_object(self.PORTAL_BUS, self.PORTAL_PATH),
+                self.PORTAL_IFACE,
+            )
+            self._glib_loop = GLib.MainLoop()
+            threading.Thread(target=self._glib_loop.run, daemon=True).start()
+            self._create_session()
+            self._available = True
+            return True
+        except Exception:
+            return False
+
+    def _sender_token(self):
+        """Return the D-Bus unique name in path-safe form (e.g. ':1.234' → '1_234')."""
+        return self._bus.get_unique_name()[1:].replace('.', '_')
+
+    def _create_session(self):
+        token = f'ss_{uuid.uuid4().hex[:8]}'
+        session_token = f'ss_s_{uuid.uuid4().hex[:8]}'
+        request_path = (
+            f'/org/freedesktop/portal/desktop/request/'
+            f'{self._sender_token()}/{token}'
+        )
+        # Subscribe to Response BEFORE calling CreateSession to avoid the race.
+        self._bus.add_signal_receiver(
+            self._on_create_session_response,
+            signal_name='Response',
+            dbus_interface='org.freedesktop.portal.Request',
+            path=request_path,
+        )
+        self._portal.CreateSession({
+            'handle_token': dbus.String(token),
+            'session_handle_token': dbus.String(session_token),
+        })
+
+    def _on_create_session_response(self, response_code, results):
+        if response_code != 0:
+            return
+        self._session_handle = str(results.get('session_handle', ''))
+        # Subscribe to Activated on the portal object (filtered by session_handle
+        # inside the callback).
+        self._bus.add_signal_receiver(
+            self._on_activated,
+            signal_name='Activated',
+            dbus_interface=self.PORTAL_IFACE,
+            path=self.PORTAL_PATH,
+        )
+
+    def bind_shortcuts(self, hotkeys):
+        """Register all shortcuts with the portal. hotkeys is a dict of
+        {shortcut_id: Qt-format key string}, e.g. {'Game_up': 'Ctrl+Alt+1'}."""
+        if not self._session_handle:
+            return
+        shortcuts = dbus.Array(
+            [
+                (
+                    dbus.String(key_id),
+                    dbus.Dictionary(
+                        {
+                            'description': dbus.String(self._description(key_id)),
+                            'preferred_trigger': dbus.String(trigger.lower()),
+                        },
+                        signature='sv',
+                    ),
+                )
+                for key_id, trigger in hotkeys.items()
+            ],
+            signature='(sa{sv})',
+        )
+        token = f'ss_{uuid.uuid4().hex[:8]}'
+        self._portal.BindShortcuts(
+            dbus.ObjectPath(self._session_handle),
+            shortcuts,
+            dbus.String(''),
+            dbus.Dictionary({'handle_token': dbus.String(token)}, signature='sv'),
+        )
+
+    def rebind(self, hotkeys):
+        """Re-register shortcuts after the user changes bindings in settings."""
+        self.bind_shortcuts(hotkeys)
+
+    def _description(self, key_id):
+        sink, direction = key_id.split('_', 1)
+        return f'{sink} Volume {direction.title()}'
+
+    def _on_activated(self, session_handle, shortcut_id, timestamp, options):
+        if str(session_handle) == self._session_handle:
+            self.shortcut_activated.emit(str(shortcut_id))
+
+    def stop(self):
+        if self._glib_loop:
+            self._glib_loop.quit()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, start_minimized=False):
         super().__init__()
