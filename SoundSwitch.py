@@ -192,12 +192,17 @@ class KeyCaptureEdit(QLineEdit):
             return
         key = event.key()
         if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt,
-                   Qt.Key_Meta, Qt.Key_AltGr):
-            return  # ignore modifier-only presses
+                   Qt.Key_Meta, Qt.Key_AltGr,
+                   Qt.Key_Super_L, Qt.Key_Super_R,
+                   Qt.Key_Hyper_L, Qt.Key_Hyper_R,
+                   Qt.Key_CapsLock, Qt.Key_NumLock, Qt.Key_ScrollLock):
+            return  # ignore modifier-only and lock key presses
         if key == Qt.Key_Escape:
             self.setText(self._previous)
             self._capturing = False
             return
+        if event.modifiers() == Qt.NoModifier:
+            return  # ignore bare unmodified key presses
         seq = QKeySequence(int(event.modifiers()) | key)
         self.setText(seq.toString())
         self._capturing = False
