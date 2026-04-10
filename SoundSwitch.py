@@ -1,13 +1,27 @@
 import sys
+import threading
+import uuid
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox, QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit, QComboBox, QHBoxLayout, QMenu, QSystemTrayIcon, QAction
+    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
+    QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
+    QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog, QGridLayout,
+    QSpinBox,
 )
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QKeySequence
 import subprocess
 import json
 import os
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette
+
+try:
+    import dbus
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+    DBUS_AVAILABLE = True
+except ImportError:
+    DBUS_AVAILABLE = False
 
 STATE_FILE = 'routing_state.json'
 CUSTOM_SINKS = ['Game', 'Media', 'Chat', 'Aux']
@@ -167,6 +181,19 @@ class MainWindow(QMainWindow):
             ]
         if 'manual_overrides' not in self.state:
             self.state['manual_overrides'] = {}
+        if 'volume_step' not in self.state:
+            self.state['volume_step'] = 5
+        if 'hotkeys' not in self.state:
+            self.state['hotkeys'] = {
+                'Game_up':    'Ctrl+Alt+1',
+                'Game_down':  'Ctrl+Alt+Shift+1',
+                'Media_up':   'Ctrl+Alt+2',
+                'Media_down': 'Ctrl+Alt+Shift+2',
+                'Chat_up':    'Ctrl+Alt+3',
+                'Chat_down':  'Ctrl+Alt+Shift+3',
+                'Aux_up':     'Ctrl+Alt+4',
+                'Aux_down':   'Ctrl+Alt+Shift+4',
+            }
         self._last_snapshot = None
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
