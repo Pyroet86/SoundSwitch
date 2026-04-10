@@ -356,7 +356,7 @@ class GlobalShortcutsManager(QtCore.QObject):
             self._available = True
             return True
         except Exception:
-            if self._glib_loop and self._glib_loop.is_running():
+            if self._glib_loop:
                 self._glib_loop.quit()
             self._glib_loop = None
             return False
@@ -399,7 +399,7 @@ class GlobalShortcutsManager(QtCore.QObject):
             dbus_interface=self.PORTAL_IFACE,
             path=self.PORTAL_PATH,
         )
-        if self._pending_hotkeys:
+        if self._pending_hotkeys is not None:
             self.bind_shortcuts(self._pending_hotkeys)
 
     def bind_shortcuts(self, hotkeys):
