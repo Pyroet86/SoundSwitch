@@ -213,6 +213,89 @@ class KeyCaptureEdit(QLineEdit):
             self._capturing = False
         super().focusOutEvent(event)
 
+class HotkeySettingsDialog(QDialog):
+    DEFAULT_HOTKEYS = {
+        'Game_up':    'Ctrl+Alt+1',
+        'Game_down':  'Ctrl+Alt+Shift+1',
+        'Media_up':   'Ctrl+Alt+2',
+        'Media_down': 'Ctrl+Alt+Shift+2',
+        'Chat_up':    'Ctrl+Alt+3',
+        'Chat_down':  'Ctrl+Alt+Shift+3',
+        'Aux_up':     'Ctrl+Alt+4',
+        'Aux_down':   'Ctrl+Alt+Shift+4',
+    }
+
+    def __init__(self, state, on_apply, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self.on_apply = on_apply
+        self._captures = {}
+        self.setWindowTitle('Hotkey Settings')
+        self.setModal(True)
+        self.setMinimumWidth(500)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(8)
+        for col, text in enumerate(['Sink', 'Volume Up', 'Volume Down']):
+            lbl = QLabel(text)
+            lbl.setFont(QFont('', 10, QFont.Bold))
+            grid.addWidget(lbl, 0, col)
+
+        for row, sink in enumerate(CUSTOM_SINKS, start=1):
+            grid.addWidget(QLabel(sink), row, 0)
+            for col, direction in enumerate(['up', 'down'], start=1):
+                key_id = f'{sink}_{direction}'
+                edit = KeyCaptureEdit()
+                edit.setText(
+                    self.state.get('hotkeys', {}).get(
+                        key_id, self.DEFAULT_HOTKEYS[key_id]
+                    )
+                )
+                self._captures[key_id] = edit
+                grid.addWidget(edit, row, col)
+
+        layout.addLayout(grid)
+
+        step_row = QHBoxLayout()
+        step_row.addWidget(QLabel('Volume Step:'))
+        self._step_spin = QSpinBox()
+        self._step_spin.setRange(1, 100)
+        self._step_spin.setSuffix(' %')
+        self._step_spin.setValue(self.state.get('volume_step', 5))
+        step_row.addWidget(self._step_spin)
+        step_row.addStretch()
+        layout.addLayout(step_row)
+
+        btn_row = QHBoxLayout()
+        apply_btn = QPushButton('Apply')
+        apply_btn.clicked.connect(self._apply)
+        reset_btn = QPushButton('Reset to Defaults')
+        reset_btn.clicked.connect(self._reset)
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(apply_btn)
+        btn_row.addWidget(reset_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def _apply(self):
+        hotkeys = {key_id: edit.text() for key_id, edit in self._captures.items()}
+        self.state['hotkeys'] = hotkeys
+        self.state['volume_step'] = self._step_spin.value()
+        self.on_apply(hotkeys, self._step_spin.value())
+        self.accept()
+
+    def _reset(self):
+        for key_id, edit in self._captures.items():
+            edit.setText(self.DEFAULT_HOTKEYS[key_id])
+        self._step_spin.setValue(5)
+
 class MainWindow(QMainWindow):
     def __init__(self, start_minimized=False):
         super().__init__()
