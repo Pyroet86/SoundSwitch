@@ -307,6 +307,13 @@ class HotkeySettingsDialog(QDialog):
             edit.setText(self.DEFAULT_HOTKEYS[key_id])
         self._step_spin.setValue(5)
 
+_QT_MOD_TO_XDG = {
+    'ctrl':  '<Control>',
+    'alt':   '<Alt>',
+    'shift': '<Shift>',
+    'meta':  '<Super>',
+}
+
 _dbus_main_loop_initialized = False
 
 
@@ -326,6 +333,7 @@ class GlobalShortcutsManager(QtCore.QObject):
         self._session_handle = None
         self._glib_loop = None
         self._available = False
+        self._pending_hotkeys = None
 
     def start(self):
         """Connect to the portal, create a session, and start the GLib event loop.
@@ -348,6 +356,9 @@ class GlobalShortcutsManager(QtCore.QObject):
             self._available = True
             return True
         except Exception:
+            if self._glib_loop and self._glib_loop.is_running():
+                self._glib_loop.quit()
+            self._glib_loop = None
             return False
 
     def _sender_token(self):
@@ -376,7 +387,10 @@ class GlobalShortcutsManager(QtCore.QObject):
     def _on_create_session_response(self, response_code, results):
         if response_code != 0:
             return
-        self._session_handle = str(results.get('session_handle', ''))
+        session_handle = str(results.get('session_handle', ''))
+        if not session_handle:
+            return
+        self._session_handle = session_handle
         # Subscribe to Activated on the portal object (filtered by session_handle
         # inside the callback).
         self._bus.add_signal_receiver(
@@ -385,12 +399,18 @@ class GlobalShortcutsManager(QtCore.QObject):
             dbus_interface=self.PORTAL_IFACE,
             path=self.PORTAL_PATH,
         )
+        if self._pending_hotkeys:
+            self.bind_shortcuts(self._pending_hotkeys)
 
     def bind_shortcuts(self, hotkeys):
         """Register all shortcuts with the portal. hotkeys is a dict of
-        {shortcut_id: Qt-format key string}, e.g. {'Game_up': 'Ctrl+Alt+1'}."""
+        {shortcut_id: Qt-format key string}, e.g. {'Game_up': 'Ctrl+Alt+1'}.
+        If the session is not yet established, the hotkeys are queued and
+        registered automatically when the session becomes ready."""
         if not self._session_handle:
+            self._pending_hotkeys = hotkeys
             return
+        self._pending_hotkeys = None
         shortcuts = dbus.Array(
             [
                 (
@@ -398,7 +418,7 @@ class GlobalShortcutsManager(QtCore.QObject):
                     dbus.Dictionary(
                         {
                             'description': dbus.String(self._description(key_id)),
-                            'preferred_trigger': dbus.String(trigger.lower()),
+                            'preferred_trigger': dbus.String(self._qt_to_xdg_trigger(trigger)),
                         },
                         signature='sv',
                     ),
@@ -422,6 +442,16 @@ class GlobalShortcutsManager(QtCore.QObject):
     def _description(self, key_id):
         sink, direction = key_id.split('_', 1)
         return f'{sink} Volume {direction.title()}'
+
+    def _qt_to_xdg_trigger(self, qt_key):
+        """Convert Qt key sequence string to XDG accelerator format.
+        e.g. 'Ctrl+Alt+1' -> '<Control><Alt>1'"""
+        parts = [p.strip() for p in qt_key.split('+')]
+        result = ''
+        for p in parts[:-1]:
+            result += _QT_MOD_TO_XDG.get(p.lower(), f'<{p}>')
+        result += parts[-1]
+        return result
 
     def _on_activated(self, session_handle, shortcut_id, timestamp, options):
         if str(session_handle) == self._session_handle:
