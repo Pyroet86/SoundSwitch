@@ -13,6 +13,7 @@ from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette
 import subprocess
 import json
 import os
+import re
 from PyQt5 import QtCore, QtGui
 
 try:
@@ -1179,11 +1180,30 @@ class MainWindow(QMainWindow):
             self.show_status(f'Failed to move stream #{sink_input_index} to sink {sink_name}', error=True)
         self.refresh_devices_and_sinks(force=True)
 
+    def get_sink_volume(self, sink_name):
+        """Return current volume of a sink as an integer 0-100, or None on failure."""
+        try:
+            output = self.run_pactl(['get-sink-volume', sink_name])
+            match = re.search(r'(\d+)%', output)
+            if match:
+                return int(match.group(1))
+        except Exception:
+            pass
+        return None
+
     def set_sink_volume(self, sink_name, direction):
         step = self.state.get('volume_step', 5)
         delta = f'+{step}%' if direction == 'up' else f'-{step}%'
         self.run_pactl(['set-sink-volume', sink_name, delta])
         self.show_status(f'{sink_name} volume {direction} ({delta})')
+        volume = self.get_sink_volume(sink_name)
+        if volume is not None:
+            self._osd.show_volume(
+                sink_name,
+                volume,
+                self.state.get('osd_position', 'bottom-right'),
+                self.state.get('osd_duration', 3),
+            )
 
     def _on_shortcut_activated(self, shortcut_id):
         parts = shortcut_id.rsplit('_', 1)
