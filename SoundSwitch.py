@@ -164,6 +164,7 @@ class RoundedBoxDelegate(QStyledItemDelegate):
             return base.expandedTo(QtCore.QSize(base.width(), 48))
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
+
 class VolumeOSD(QWidget):
     """Non-focus-stealing on-screen display for volume changes."""
 
@@ -213,9 +214,11 @@ class VolumeOSD(QWidget):
         self._hide_timer.stop()
         self.setWindowOpacity(1.0)
         self.show()
-        self._hide_timer.start(duration * 1000)
+        self._hide_timer.start(int(duration * 1000))
 
     def _start_fade(self):
+        # QTimer.timeout cannot connect directly to QPropertyAnimation.start
+        # because start() is overloaded; this wrapper resolves the ambiguity.
         self._anim.start()
 
     def _position_on_screen(self, position):
