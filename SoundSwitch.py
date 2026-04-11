@@ -229,7 +229,7 @@ class VolumeOSD(QWidget):
             self.move(0, 0)
             return
         sg = screen.geometry()
-        w, h = self.sizeHint().width(), self.sizeHint().height()
+        w, h = self.width(), self.height()
         m = self._MARGIN
         positions = {
             'top-left':      (sg.x() + m,                        sg.y() + m),
