@@ -664,7 +664,7 @@ class MainWindow(QMainWindow):
         osd_action.triggered.connect(self.open_osd_settings)
         file_menu.addSeparator()
         exit_action = file_menu.addAction('Exit')
-        exit_action.triggered.connect(self.close)
+        exit_action.triggered.connect(self.real_close)
         self.setMenuBar(menubar)
 
     def apply_dark_theme(self):
@@ -1180,7 +1180,7 @@ class MainWindow(QMainWindow):
         self.action_hide = QAction('Hide', self)
         self.action_hide.triggered.connect(self.hide_to_tray)
         self.action_exit = QAction('Exit', self)
-        self.action_exit.triggered.connect(self.close)
+        self.action_exit.triggered.connect(self.real_close)
         self.tray_menu.addAction(self.action_show)
         self.tray_menu.addAction(self.action_hide)
         self.tray_menu.addSeparator()
@@ -1215,13 +1215,23 @@ class MainWindow(QMainWindow):
             else:
                 self.hide_to_tray()
 
+    def changeEvent(self, event):
+        if event.type() == QtCore.QEvent.WindowStateChange and self.isMinimized():
+            QTimer.singleShot(0, self.hide_to_tray)
+        super().changeEvent(event)
+
     def closeEvent(self, event):
+        # Close button hides to tray; only real_close() actually quits.
+        event.ignore()
+        self.hide_to_tray()
+
+    def real_close(self):
         self.save_state()
         if hasattr(self, '_shortcuts_manager'):
             self._shortcuts_manager.stop()
         if self.tray_icon:
             self.tray_icon.hide()
-        super().closeEvent(event)
+        QApplication.instance().quit()
 
     def move_sink_input(self, sink_input_index, sink_name):
         # Move the sink input to the selected sink
