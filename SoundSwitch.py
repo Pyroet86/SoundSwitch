@@ -1,6 +1,10 @@
 import sys
+import re
 import threading
 import uuid
+import subprocess
+import json
+import os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
@@ -10,10 +14,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette
-import subprocess
-import json
-import os
-import re
 from PyQt5 import QtCore, QtGui
 
 try:
@@ -240,6 +240,7 @@ class VolumeOSD(QWidget):
         }
         x, y = positions.get(position, positions['bottom-right'])
         self.move(x, y)
+
 
 class HotkeySettingsDialog(QDialog):
 
@@ -1192,8 +1193,11 @@ class MainWindow(QMainWindow):
     def get_sink_volume(self, sink_name):
         """Return current volume of a sink as an integer 0-100, or None on failure."""
         try:
-            output = self.run_pactl(['get-sink-volume', sink_name])
-            match = re.search(r'(\d+)%', output)
+            result = subprocess.run(
+                ['pactl', 'get-sink-volume', sink_name],
+                capture_output=True, text=True, check=True,
+            )
+            match = re.search(r'(\d+)%', result.stdout)
             if match:
                 return int(match.group(1))
         except Exception:
