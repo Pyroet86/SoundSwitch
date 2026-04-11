@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QSpinBox,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette
+from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
 from PyQt5 import QtCore, QtGui
 
 try:
@@ -556,11 +556,55 @@ class GlobalShortcutsManager(QtCore.QObject):
             self._glib_loop.quit()
 
 
+def create_app_icon():
+    """Create a programmatic speaker-with-soundwaves icon in the app's cyan-on-dark colour scheme."""
+    size = 64
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+
+    p = QPainter(pixmap)
+    p.setRenderHint(QPainter.Antialiasing)
+
+    # Dark navy circular background
+    p.setBrush(QBrush(QColor('#1e2a3a')))
+    p.setPen(QPen(QColor('#2a3f55'), 2))
+    p.drawEllipse(2, 2, 60, 60)
+
+    cyan = QColor('#00bfff')
+
+    # Speaker box (left rectangle)
+    p.setBrush(QBrush(cyan))
+    p.setPen(Qt.NoPen)
+    p.drawRoundedRect(12, 27, 9, 10, 2, 2)
+
+    # Speaker cone (trapezoid opening to the right)
+    cone = QPainterPath()
+    cone.moveTo(21, 27)
+    cone.lineTo(31, 17)
+    cone.lineTo(31, 47)
+    cone.lineTo(21, 37)
+    cone.closeSubpath()
+    p.fillPath(cone, QBrush(cyan))
+
+    # Sound waves: three arcs emanating from the cone opening
+    p.setBrush(Qt.NoBrush)
+    for i, (offset, alpha, width) in enumerate([(0, 255, 3), (7, 210, 2), (14, 150, 2)]):
+        wave_color = QColor('#00bfff')
+        wave_color.setAlpha(alpha)
+        pen = QPen(wave_color, width, Qt.SolidLine, Qt.RoundCap)
+        p.setPen(pen)
+        margin = 8 + offset
+        p.drawArc(31 - margin, 32 - margin, margin * 2, margin * 2, -55 * 16, 110 * 16)
+
+    p.end()
+    return QIcon(pixmap)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, start_minimized=False):
         super().__init__()
         self.setWindowTitle('SoundSwitch - PipeWire Audio Router')
-        self.setWindowIcon(QIcon.fromTheme('audio-card'))
+        self.setWindowIcon(create_app_icon())
         self.resize(1000, 600)
         self.init_menu_bar()
         self.tray_icon = None
@@ -1128,7 +1172,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, 'Error', f'Failed to save state: {e}')
 
     def init_tray_icon(self):
-        icon = QIcon.fromTheme('audio-card')
+        icon = create_app_icon()
         self.tray_icon = QSystemTrayIcon(icon, self)
         self.tray_menu = QMenu()
         self.action_show = QAction('Show', self)
