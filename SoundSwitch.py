@@ -288,6 +288,69 @@ class HotkeySettingsDialog(QDialog):
             raise
         self.accept()
 
+
+class OSDSettingsDialog(QDialog):
+
+    POSITIONS = [
+        ('Top Left',      'top-left'),
+        ('Top Center',    'top-center'),
+        ('Top Right',     'top-right'),
+        ('Bottom Left',   'bottom-left'),
+        ('Bottom Center', 'bottom-center'),
+        ('Bottom Right',  'bottom-right'),
+    ]
+
+    def __init__(self, state, on_apply, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self.on_apply = on_apply
+        self.setWindowTitle('OSD Settings')
+        self.setModal(True)
+        self.setMinimumWidth(320)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        pos_row = QHBoxLayout()
+        pos_row.addWidget(QLabel('Position:'))
+        self._pos_combo = QComboBox()
+        for label, _ in self.POSITIONS:
+            self._pos_combo.addItem(label)
+        current_pos = self.state.get('osd_position', 'bottom-right')
+        keys = [k for _, k in self.POSITIONS]
+        if current_pos in keys:
+            self._pos_combo.setCurrentIndex(keys.index(current_pos))
+        pos_row.addWidget(self._pos_combo)
+        pos_row.addStretch()
+        layout.addLayout(pos_row)
+
+        dur_row = QHBoxLayout()
+        dur_row.addWidget(QLabel('Display Duration:'))
+        self._dur_spin = QSpinBox()
+        self._dur_spin.setRange(1, 5)
+        self._dur_spin.setSuffix(' s')
+        self._dur_spin.setValue(self.state.get('osd_duration', 3))
+        dur_row.addWidget(self._dur_spin)
+        dur_row.addStretch()
+        layout.addLayout(dur_row)
+
+        btn_row = QHBoxLayout()
+        apply_btn = QPushButton('Apply')
+        apply_btn.clicked.connect(self._apply)
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(apply_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def _apply(self):
+        self.state['osd_position'] = self.POSITIONS[self._pos_combo.currentIndex()][1]
+        self.state['osd_duration'] = self._dur_spin.value()
+        self.on_apply()
+        self.accept()
+
 _QT_MOD_TO_XDG = {
     'ctrl':  '<Control>',
     'alt':   '<Alt>',
