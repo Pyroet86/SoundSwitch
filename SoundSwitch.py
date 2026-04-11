@@ -351,6 +351,7 @@ class OSDSettingsDialog(QDialog):
         self.on_apply()
         self.accept()
 
+
 _QT_MOD_TO_XDG = {
     'ctrl':  '<Control>',
     'alt':   '<Alt>',
