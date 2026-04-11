@@ -174,7 +174,8 @@ class VolumeOSD(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint |
-                         Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
+                         Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus |
+                         Qt.X11BypassWindowManagerHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self._label = QLabel(self)
