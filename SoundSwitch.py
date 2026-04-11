@@ -574,6 +574,10 @@ class MainWindow(QMainWindow):
             self.state['volume_step'] = 5
         if 'shortcut_version' not in self.state:
             self.state['shortcut_version'] = 0
+        if 'osd_position' not in self.state:
+            self.state['osd_position'] = 'bottom-right'
+        if 'osd_duration' not in self.state:
+            self.state['osd_duration'] = 3
         self._last_snapshot = None
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
@@ -589,6 +593,7 @@ class MainWindow(QMainWindow):
         self.apply_dark_theme()
         self.statusBar().showMessage('Ready')
         self.init_tray_icon()
+        self._osd = VolumeOSD()
         self._shortcuts_manager = GlobalShortcutsManager(self)
         if self._shortcuts_manager.start():
             self._shortcuts_manager.shortcut_activated.connect(self._on_shortcut_activated)
