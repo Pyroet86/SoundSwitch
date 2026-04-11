@@ -614,6 +614,8 @@ class MainWindow(QMainWindow):
         file_menu = menubar.addMenu('File')
         hotkey_action = file_menu.addAction('Hotkey Settings\u2026')
         hotkey_action.triggered.connect(self.open_hotkey_settings)
+        osd_action = file_menu.addAction('OSD Settings\u2026')
+        osd_action.triggered.connect(self.open_osd_settings)
         file_menu.addSeparator()
         exit_action = file_menu.addAction('Exit')
         exit_action.triggered.connect(self.close)
@@ -1136,6 +1138,13 @@ class MainWindow(QMainWindow):
         self.tray_menu.addAction(self.action_show)
         self.tray_menu.addAction(self.action_hide)
         self.tray_menu.addSeparator()
+        action_hotkey = QAction('Hotkey Settings…', self)
+        action_hotkey.triggered.connect(self.open_hotkey_settings)
+        self.tray_menu.addAction(action_hotkey)
+        action_osd = QAction('OSD Settings…', self)
+        action_osd.triggered.connect(self.open_osd_settings)
+        self.tray_menu.addAction(action_osd)
+        self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.action_exit)
         self.tray_icon.setContextMenu(self.tray_menu)
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
@@ -1230,6 +1239,11 @@ class MainWindow(QMainWindow):
             else:
                 self.show_status('Settings saved — hotkeys inactive (portal unavailable).', error=True)
         HotkeySettingsDialog(self.state, on_apply, parent=self).exec_()
+
+    def open_osd_settings(self):
+        def on_apply():
+            self.save_state()
+        OSDSettingsDialog(self.state, on_apply, parent=self).exec_()
 
 if __name__ == '__main__':
     import argparse
