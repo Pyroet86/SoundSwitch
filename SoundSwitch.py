@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
     QSpinBox,
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette
 import subprocess
 import json
@@ -164,6 +164,79 @@ class RoundedBoxDelegate(QStyledItemDelegate):
             return base.expandedTo(QtCore.QSize(base.width(), 48))
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
+class VolumeOSD(QWidget):
+    """Non-focus-stealing on-screen display for volume changes."""
+
+    _MARGIN = 20
+    _FADE_MS = 400
+
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint |
+                         Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self._label = QLabel(self)
+        self._label.setAlignment(Qt.AlignCenter)
+        self._label.setStyleSheet(
+            'QLabel {'
+            '  background: #1e1e2e;'
+            '  color: #ffffff;'
+            '  font-size: 14px;'
+            '  font-weight: bold;'
+            '  border-radius: 8px;'
+            '  padding: 12px 20px;'
+            '}'
+        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._label)
+        self.setMinimumWidth(180)
+
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self._start_fade)
+
+        self._anim = QPropertyAnimation(self, b'windowOpacity')
+        self._anim.setDuration(self._FADE_MS)
+        self._anim.setStartValue(1.0)
+        self._anim.setEndValue(0.0)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.finished.connect(self.hide)
+
+    def show_volume(self, sink_name, volume, position, duration):
+        """Show the OSD with the given text, position, and fade duration (seconds)."""
+        self._label.setText(f'{sink_name}: {volume}%')
+        self.adjustSize()
+        self._position_on_screen(position)
+        # Cancel any in-flight fade and reset opacity
+        self._anim.stop()
+        self._hide_timer.stop()
+        self.setWindowOpacity(1.0)
+        self.show()
+        self._hide_timer.start(duration * 1000)
+
+    def _start_fade(self):
+        self._anim.start()
+
+    def _position_on_screen(self, position):
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            self.move(0, 0)
+            return
+        sg = screen.geometry()
+        w, h = self.sizeHint().width(), self.sizeHint().height()
+        m = self._MARGIN
+        positions = {
+            'top-left':      (sg.x() + m,                        sg.y() + m),
+            'top-center':    (sg.x() + (sg.width() - w) // 2,   sg.y() + m),
+            'top-right':     (sg.x() + sg.width() - w - m,      sg.y() + m),
+            'bottom-left':   (sg.x() + m,                        sg.y() + sg.height() - h - m),
+            'bottom-center': (sg.x() + (sg.width() - w) // 2,   sg.y() + sg.height() - h - m),
+            'bottom-right':  (sg.x() + sg.width() - w - m,      sg.y() + sg.height() - h - m),
+        }
+        x, y = positions.get(position, positions['bottom-right'])
+        self.move(x, y)
+
 class HotkeySettingsDialog(QDialog):
 
     def __init__(self, state, on_apply, parent=None):
@@ -179,12 +252,7 @@ class HotkeySettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        info = QLabel(
-            'Shortcut keys are configured in KDE.\n'
-            '"Reset shortcuts" re-registers all 8 volume shortcuts with their\n'
-            'default key combinations (Ctrl+Alt+1\u20134 for up, Ctrl+Alt+Shift+1\u20134 for down).'
-        )
-        info.setWordWrap(True)
+        info = QLabel('Shortcut keys are managed by KDE.')
         info.setStyleSheet('color: #aaa; font-size: 11px;')
         layout.addWidget(info)
 
