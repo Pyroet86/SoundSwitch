@@ -5,11 +5,11 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
-    QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog, QGridLayout,
+    QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
     QSpinBox,
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QKeySequence
+from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette
 import subprocess
 import json
 import os
@@ -164,76 +164,15 @@ class RoundedBoxDelegate(QStyledItemDelegate):
             return base.expandedTo(QtCore.QSize(base.width(), 48))
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
-class KeyCaptureEdit(QLineEdit):
-    """QLineEdit that captures a key combination on click."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._capturing = False
-        self._previous = ''
-        self.setReadOnly(True)
-        self.setPlaceholderText('Click to set hotkey')
-        self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(
-            'QLineEdit { background: #2d2f31; color: #f0f0f0; border: 1px solid #444; '
-            'border-radius: 4px; padding: 4px 8px; }'
-            'QLineEdit:focus { border-color: #00bfff; }'
-        )
-
-    def mousePressEvent(self, event):
-        self._previous = self.text()
-        self._capturing = True
-        self.setText('Press keys\u2026')
-        self.setFocus()
-        super().mousePressEvent(event)
-
-    def keyPressEvent(self, event):
-        if not self._capturing:
-            return
-        key = event.key()
-        if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt,
-                   Qt.Key_Meta, Qt.Key_AltGr,
-                   Qt.Key_Super_L, Qt.Key_Super_R,
-                   Qt.Key_Hyper_L, Qt.Key_Hyper_R,
-                   Qt.Key_CapsLock, Qt.Key_NumLock, Qt.Key_ScrollLock):
-            return
-        if key == Qt.Key_Escape:
-            self.setText(self._previous)
-            self._capturing = False
-            return
-        if event.modifiers() == Qt.NoModifier:
-            return
-        seq = QKeySequence(int(event.modifiers()) | key)
-        self.setText(seq.toString())
-        self._capturing = False
-
-    def focusOutEvent(self, event):
-        if self._capturing:
-            self.setText(self._previous)
-            self._capturing = False
-        super().focusOutEvent(event)
-
-
 class HotkeySettingsDialog(QDialog):
-    DEFAULT_HOTKEYS = {
-        'Game_up':    'Ctrl+Alt+1',
-        'Game_down':  'Ctrl+Alt+Shift+1',
-        'Media_up':   'Ctrl+Alt+2',
-        'Media_down': 'Ctrl+Alt+Shift+2',
-        'Chat_up':    'Ctrl+Alt+3',
-        'Chat_down':  'Ctrl+Alt+Shift+3',
-        'Aux_up':     'Ctrl+Alt+4',
-        'Aux_down':   'Ctrl+Alt+Shift+4',
-    }
 
     def __init__(self, state, on_apply, parent=None):
         super().__init__(parent)
         self.state = state
         self.on_apply = on_apply
-        self._captures = {}
         self.setWindowTitle('Hotkey Settings')
         self.setModal(True)
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(320)
         self._init_ui()
 
     def _init_ui(self):
@@ -241,35 +180,13 @@ class HotkeySettingsDialog(QDialog):
         layout.setSpacing(12)
 
         info = QLabel(
-            'Set your preferred key combinations below, then click Apply.\n'
-            'KDE will show a shortcut confirmation dialog — accept it to activate the new bindings.'
+            'Shortcut keys are configured in KDE.\n'
+            '"Reset shortcuts" re-registers all 8 volume shortcuts with their\n'
+            'default key combinations (Ctrl+Alt+1\u20134 for up, Ctrl+Alt+Shift+1\u20134 for down).'
         )
         info.setWordWrap(True)
         info.setStyleSheet('color: #aaa; font-size: 11px;')
         layout.addWidget(info)
-
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(8)
-        for col, text in enumerate(['Sink', 'Volume \u2191 Up', 'Volume \u2193 Down']):
-            lbl = QLabel(text)
-            lbl.setFont(QFont('', 10, QFont.Bold))
-            grid.addWidget(lbl, 0, col)
-
-        for row, sink in enumerate(CUSTOM_SINKS, start=1):
-            grid.addWidget(QLabel(sink), row, 0)
-            for col, direction in enumerate(['up', 'down'], start=1):
-                key_id = f'{sink}_{direction}'
-                edit = KeyCaptureEdit()
-                edit.setText(
-                    self.state.get('hotkeys', {}).get(
-                        key_id, self.DEFAULT_HOTKEYS[key_id]
-                    )
-                )
-                self._captures[key_id] = edit
-                grid.addWidget(edit, row, col)
-
-        layout.addLayout(grid)
 
         step_row = QHBoxLayout()
         step_row.addWidget(QLabel('Volume Step:'))
@@ -282,38 +199,23 @@ class HotkeySettingsDialog(QDialog):
         layout.addLayout(step_row)
 
         btn_row = QHBoxLayout()
-        apply_btn = QPushButton('Apply')
-        apply_btn.clicked.connect(self._apply)
-        reset_btn = QPushButton('Reset to Defaults')
-        reset_btn.clicked.connect(self._reset)
+        reset_btn = QPushButton('Reset shortcuts')
+        reset_btn.clicked.connect(self._apply)
         cancel_btn = QPushButton('Cancel')
         cancel_btn.clicked.connect(self.reject)
-        btn_row.addWidget(apply_btn)
         btn_row.addWidget(reset_btn)
         btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
 
     def _apply(self):
-        for key_id, edit in self._captures.items():
-            if not edit.text().strip():
-                edit.setText(self.DEFAULT_HOTKEYS[key_id])
-        hotkeys = {key_id: edit.text() for key_id, edit in self._captures.items()}
-        old_hotkeys = self.state.get('hotkeys')
         old_step = self.state.get('volume_step')
-        self.state['hotkeys'] = hotkeys
         self.state['volume_step'] = self._step_spin.value()
         try:
-            self.on_apply(hotkeys, self._step_spin.value())
+            self.on_apply(self._step_spin.value())
         except Exception:
-            self.state['hotkeys'] = old_hotkeys
             self.state['volume_step'] = old_step
             raise
         self.accept()
-
-    def _reset(self):
-        for key_id, edit in self._captures.items():
-            edit.setText(self.DEFAULT_HOTKEYS[key_id])
-        self._step_spin.setValue(5)
 
 _QT_MOD_TO_XDG = {
     'ctrl':  '<Control>',
@@ -535,8 +437,6 @@ class MainWindow(QMainWindow):
             self.state['manual_overrides'] = {}
         if 'volume_step' not in self.state:
             self.state['volume_step'] = 5
-        if 'hotkeys' not in self.state:
-            self.state['hotkeys'] = dict(HotkeySettingsDialog.DEFAULT_HOTKEYS)
         if 'shortcut_version' not in self.state:
             self.state['shortcut_version'] = 0
         self._last_snapshot = None
@@ -558,7 +458,7 @@ class MainWindow(QMainWindow):
         if self._shortcuts_manager.start():
             self._shortcuts_manager.shortcut_activated.connect(self._on_shortcut_activated)
             self._shortcuts_manager.bind_shortcuts(
-                self.state.get('hotkeys', GlobalShortcutsManager.DEFAULT_HOTKEYS),
+                GlobalShortcutsManager.DEFAULT_HOTKEYS,
                 self.state.get('shortcut_version', 0),
             )
         else:
@@ -1155,13 +1055,16 @@ class MainWindow(QMainWindow):
         self.set_sink_volume(sink_name, direction)
 
     def open_hotkey_settings(self):
-        def on_apply(hotkeys, step):
+        def on_apply(step):
             self.state['shortcut_version'] = self.state.get('shortcut_version', 0) + 1
             self.save_state()
             if self._shortcuts_manager.is_available:
-                ok = self._shortcuts_manager.restart(hotkeys, self.state['shortcut_version'])
+                ok = self._shortcuts_manager.restart(
+                    GlobalShortcutsManager.DEFAULT_HOTKEYS,
+                    self.state['shortcut_version'],
+                )
                 if ok:
-                    self.show_status('Hotkey settings saved.')
+                    self.show_status('Shortcuts reset to defaults.')
                 else:
                     self.show_status('Settings saved — could not restart shortcut session.', error=True)
             else:
