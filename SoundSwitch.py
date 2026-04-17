@@ -704,6 +704,8 @@ class MainWindow(QMainWindow):
         menubar.setNativeMenuBar(False)
         menubar.setStyleSheet('QMenuBar { background: #232629; color: #f0f0f0; } QMenuBar::item:selected { background: #005f87; } QMenu { background: #232629; color: #f0f0f0; } QMenu::item:selected { background: #005f87; }')
         file_menu = menubar.addMenu('File')
+        settings_action = file_menu.addAction('Settings\u2026')
+        settings_action.triggered.connect(self.open_settings)
         hotkey_action = file_menu.addAction('Hotkey Settings\u2026')
         hotkey_action.triggered.connect(self.open_hotkey_settings)
         osd_action = file_menu.addAction('OSD Settings\u2026')
@@ -1230,6 +1232,9 @@ class MainWindow(QMainWindow):
         self.tray_menu.addAction(self.action_show)
         self.tray_menu.addAction(self.action_hide)
         self.tray_menu.addSeparator()
+        action_settings = QAction('Settings…', self)
+        action_settings.triggered.connect(self.open_settings)
+        self.tray_menu.addAction(action_settings)
         action_hotkey = QAction('Hotkey Settings…', self)
         action_hotkey.triggered.connect(self.open_hotkey_settings)
         self.tray_menu.addAction(action_hotkey)
@@ -1349,6 +1354,9 @@ class MainWindow(QMainWindow):
         def on_apply():
             self.save_state()
         OSDSettingsDialog(self.state, on_apply, parent=self).exec_()
+
+    def open_settings(self):
+        SettingsDialog(parent=self).exec_()
 
 if __name__ == '__main__':
     import argparse
