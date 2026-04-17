@@ -5,12 +5,13 @@ import uuid
 import subprocess
 import json
 import os
+import autostart
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
-    QSpinBox,
+    QSpinBox, QCheckBox,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
@@ -353,6 +354,51 @@ class OSDSettingsDialog(QDialog):
         self.state['osd_duration'] = self._dur_spin.value()
         self.on_apply()
         self.accept()
+
+
+class SettingsDialog(QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Settings')
+        self.setModal(True)
+        self.setMinimumWidth(300)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        self._autostart_cb = QCheckBox('Start SoundSwitch on login')
+        self._autostart_cb.setChecked(autostart.is_enabled())
+        layout.addWidget(self._autostart_cb)
+
+        self._minimized_cb = QCheckBox('Start minimized to tray')
+        self._minimized_cb.setChecked(autostart.is_minimized())
+        self._minimized_cb.setEnabled(autostart.is_enabled())
+        layout.addWidget(self._minimized_cb)
+
+        self._autostart_cb.stateChanged.connect(self._on_autostart_changed)
+        self._minimized_cb.stateChanged.connect(self._on_minimized_changed)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QPushButton('Close')
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _on_autostart_changed(self, _state):
+        enabled = self._autostart_cb.isChecked()
+        self._minimized_cb.setEnabled(enabled)
+        if enabled:
+            autostart.enable(start_minimized=self._minimized_cb.isChecked())
+        else:
+            autostart.disable()
+
+    def _on_minimized_changed(self, _state):
+        if self._autostart_cb.isChecked():
+            autostart.enable(start_minimized=self._minimized_cb.isChecked())
 
 
 _QT_MOD_TO_XDG = {
