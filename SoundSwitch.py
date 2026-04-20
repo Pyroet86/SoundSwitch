@@ -406,6 +406,75 @@ class SettingsDialog(QDialog):
             autostart.enable(start_minimized=self._minimized_cb.isChecked())
 
 
+class NoiseCancelDialog(QDialog):
+
+    def __init__(self, mic_name, mic_description, current_settings=None, parent=None):
+        super().__init__(parent)
+        self.mic_name = mic_name
+        self.setWindowTitle('Noise Cancellation Settings')
+        self.setModal(True)
+        self.setMinimumWidth(400)
+        self._init_ui(mic_description, current_settings or {})
+
+    def _init_ui(self, mic_description, settings):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        layout.addWidget(QLabel(f'Microphone: {mic_description}'))
+
+        threshold_label_row = QHBoxLayout()
+        threshold_label_row.addWidget(QLabel('VAD Threshold:'))
+        threshold_label_row.addStretch()
+        layout.addLayout(threshold_label_row)
+
+        threshold_row = QHBoxLayout()
+        self._threshold_slider = QSlider(Qt.Horizontal)
+        self._threshold_slider.setRange(0, 100)
+        self._threshold_slider.setValue(settings.get('vad_threshold', 50))
+        self._threshold_spin = QSpinBox()
+        self._threshold_spin.setRange(0, 100)
+        self._threshold_spin.setValue(settings.get('vad_threshold', 50))
+        self._threshold_slider.valueChanged.connect(self._threshold_spin.setValue)
+        self._threshold_spin.valueChanged.connect(self._threshold_slider.setValue)
+        threshold_row.addWidget(self._threshold_slider)
+        threshold_row.addWidget(self._threshold_spin)
+        layout.addLayout(threshold_row)
+
+        hint = QLabel('Lower = more aggressive noise suppression')
+        hint.setStyleSheet('color: #aaa; font-size: 11px;')
+        layout.addWidget(hint)
+
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel('Channel Mode:'))
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItems(['Mono', 'Stereo'])
+        self._mode_combo.setCurrentText(settings.get('channel_mode', 'mono').capitalize())
+        mode_row.addWidget(self._mode_combo)
+        mode_row.addStretch()
+        layout.addLayout(mode_row)
+
+        layout.addWidget(QLabel('Select this source name in Discord / other apps:'))
+        safe_id = _safe_mic_id(self.mic_name)
+        self._virt_field = QLineEdit(f'rnnoise_out_{safe_id}.monitor')
+        self._virt_field.setReadOnly(True)
+        layout.addWidget(self._virt_field)
+
+        btn_row = QHBoxLayout()
+        apply_btn = QPushButton('Apply')
+        apply_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(apply_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def get_settings(self):
+        return {
+            'vad_threshold': self._threshold_spin.value(),
+            'channel_mode': self._mode_combo.currentText().lower(),
+        }
+
+
 _QT_MOD_TO_XDG = {
     'ctrl':  '<Control>',
     'alt':   '<Alt>',
