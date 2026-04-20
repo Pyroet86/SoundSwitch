@@ -1436,26 +1436,21 @@ class MainWindow(QMainWindow):
                 mic_name = source['name']
                 label = source['description']
                 bg = QColor('#232629') if i % 2 == 0 else QColor('#2d2f31')
+                display = f'{label} [NC]' if mic_name in nc_state else label
+                item = QListWidgetItem(display)
+                item.setData(Qt.ItemDataRole.UserRole, mic_name)
+                item.setBackground(QBrush(bg))
                 if mic_name in nc_state:
-                    item = QListWidgetItem(label)
-                    item.setData(Qt.ItemDataRole.UserRole, mic_name)
-                    item.setBackground(QBrush(bg))
-                    # Append [NC] badge in cyan
-                    item.setText(f'{label} [NC]')
                     item.setForeground(QBrush(QColor('#00bfff')))
-                    self.inputs_list.addItem(item)
-                    # Non-selectable sub-item showing the virtual source name
+                self.inputs_list.addItem(item)
+                if mic_name in nc_state:
                     virtual_source = nc_state[mic_name].get('virtual_source', '')
                     sub = QListWidgetItem(f'  ↳ {virtual_source}')
                     sub.setFlags(Qt.NoItemFlags)
+                    sub.setBackground(QBrush(bg))
                     sub.setForeground(QBrush(QColor('#888')))
                     sub.setFont(self._italic_font())
                     self.inputs_list.addItem(sub)
-                else:
-                    item = QListWidgetItem(label)
-                    item.setData(Qt.ItemDataRole.UserRole, mic_name)
-                    item.setBackground(QBrush(bg))
-                    self.inputs_list.addItem(item)
         else:
             placeholder = QListWidgetItem('(No microphones found)')
             placeholder.setFlags(Qt.NoItemFlags)
