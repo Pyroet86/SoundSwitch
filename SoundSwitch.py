@@ -927,8 +927,8 @@ class MainWindow(QMainWindow):
                 current = {}
             elif line.startswith('Name:'):
                 current['name'] = line.split(':', 1)[1].strip()
-            elif line.startswith('device.description ='):
-                current['description'] = line.split('=', 1)[1].strip().strip('"')
+            elif line.startswith('Description:'):
+                current['description'] = line.split(':', 1)[1].strip()
         if current.get('name') and not current['name'].endswith('.monitor'):
             sources.append(current)
         for s in sources:
