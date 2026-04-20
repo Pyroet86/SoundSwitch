@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
-    QSpinBox, QCheckBox, QSplitter,
+    QSpinBox, QCheckBox, QSplitter, QSlider,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
@@ -27,6 +27,11 @@ except ImportError:
 
 STATE_FILE = 'routing_state.json'
 CUSTOM_SINKS = ['Game', 'Media', 'Chat', 'Aux']
+RNNOISE_LADSPA = '/usr/lib/ladspa/librnnoise_ladspa.so'
+
+def _safe_mic_id(mic_name):
+    """Return a PipeWire-safe sink name component derived from a source name."""
+    return re.sub(r'[^a-zA-Z0-9]', '_', mic_name)[:30]
 
 class DraggableListWidget(QListWidget):
     def __init__(self, parent=None):
