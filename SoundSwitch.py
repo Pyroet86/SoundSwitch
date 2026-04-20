@@ -943,6 +943,8 @@ class MainWindow(QMainWindow):
                 self.run_pactl(['load-module', 'module-null-sink', f'sink_name={sink}', f'sink_properties=device.description={sink}'])
 
     def get_input_sources(self):
+        # Uses the top-level Description: field (always present) rather than the
+        # nested device.description property, which avoids Properties-block parsing complexity.
         output = self.run_pactl(['list', 'sources'])
         sources = []
         current = {}
