@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
-    QSpinBox, QCheckBox,
+    QSpinBox, QCheckBox, QSplitter,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
@@ -872,8 +872,13 @@ class MainWindow(QMainWindow):
             sinks_panel.addLayout(vbox)
         sinks_panel.addSpacing(0)
 
-        # Outputs panel
-        outputs_panel = QVBoxLayout()
+        # Right panel — splitter with Output Devices (top) and Input Devices (bottom)
+        right_splitter = QSplitter(Qt.Vertical)
+
+        # Output Devices widget
+        outputs_widget = QWidget()
+        outputs_panel = QVBoxLayout(outputs_widget)
+        outputs_panel.setContentsMargins(0, 0, 0, 0)
         outputs_label = QLabel('Output Devices')
         outputs_label.setFont(QFont('', 12, QFont.Bold))
         outputs_label.setStyleSheet('margin-bottom: 8px;')
@@ -889,14 +894,33 @@ class MainWindow(QMainWindow):
         self.set_default_btn = QPushButton('Set as Default Output')
         self.set_default_btn.clicked.connect(self.set_default_sink)
         outputs_panel.addWidget(self.set_default_btn)
-        outputs_panel.addSpacing(10)
+
+        # Input Devices widget
+        inputs_widget = QWidget()
+        inputs_panel = QVBoxLayout(inputs_widget)
+        inputs_panel.setContentsMargins(0, 8, 0, 0)
+        inputs_label = QLabel('Input Devices')
+        inputs_label.setFont(QFont('', 12, QFont.Bold))
+        inputs_label.setStyleSheet('margin-bottom: 8px;')
+        self.inputs_list = QListWidget()
+        self.inputs_list.setAlternatingRowColors(True)
+        self.inputs_list.setSelectionMode(QListWidget.SingleSelection)
+        self.inputs_list.setContentsMargins(0, 0, 0, 0)
+        self.inputs_list.setStyleSheet('QListWidget { padding: 8px; }')
+        self.inputs_list.setItemDelegate(RoundedBoxDelegate())
+        inputs_panel.addWidget(inputs_label)
+        inputs_panel.addWidget(self.inputs_list)
+
+        right_splitter.addWidget(outputs_widget)
+        right_splitter.addWidget(inputs_widget)
+        right_splitter.setSizes([300, 300])
 
         # Add panels to main layout
         main_layout.addLayout(devices_panel, 2)
         main_layout.addSpacing(16)
         main_layout.addLayout(sinks_panel, 3)
         main_layout.addSpacing(16)
-        main_layout.addLayout(outputs_panel, 2)
+        main_layout.addWidget(right_splitter, 2)
 
     def run_pactl(self, args):
         try:
