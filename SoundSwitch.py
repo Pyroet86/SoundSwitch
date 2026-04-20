@@ -1112,12 +1112,11 @@ class MainWindow(QMainWindow):
         null_out = self.run_pactl([
             'load-module', 'module-null-sink',
             f'sink_name=rnnoise_out_{safe_id}',
-            f'sink_properties=device.description="{virtual_source}"',
+            f'sink_properties=device.description={virtual_source}',
         ])
         try:
             null_id = int(null_out.strip())
         except ValueError:
-            self.show_status('Failed to create noise cancellation sink.', error=True)
             return
 
         ladspa_out = self.run_pactl([
@@ -1132,7 +1131,6 @@ class MainWindow(QMainWindow):
             ladspa_id = int(ladspa_out.strip())
         except ValueError:
             self.run_pactl(['unload-module', str(null_id)])
-            self.show_status('Failed to load RNNoise LADSPA plugin.', error=True)
             return
 
         loopback_out = self.run_pactl([
@@ -1147,7 +1145,6 @@ class MainWindow(QMainWindow):
         except ValueError:
             self.run_pactl(['unload-module', str(ladspa_id)])
             self.run_pactl(['unload-module', str(null_id)])
-            self.show_status('Failed to create noise cancellation loopback.', error=True)
             return
 
         self.state.setdefault('noise_cancel', {})[mic_name] = {
