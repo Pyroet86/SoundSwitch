@@ -1229,9 +1229,27 @@ class MainWindow(QMainWindow):
             else:
                 item.setBackground(QBrush(QColor('#2d2f31')))
             self.outputs_list.addItem(item)
+        # Input Devices panel
+        self.inputs_list.clear()
+        input_sources = self.get_input_sources()
+        if input_sources:
+            for i, source in enumerate(input_sources):
+                item = QListWidgetItem(source['description'])
+                item.setData(Qt.ItemDataRole.UserRole, source['name'])
+                if i % 2 == 0:
+                    item.setBackground(QBrush(QColor('#232629')))
+                else:
+                    item.setBackground(QBrush(QColor('#2d2f31')))
+                self.inputs_list.addItem(item)
+        else:
+            placeholder = QListWidgetItem('(No microphones found)')
+            placeholder.setFlags(Qt.NoItemFlags)
+            placeholder.setForeground(QBrush(QColor('#555')))
+            self.inputs_list.addItem(placeholder)
+
         # Refresh rules list
         self.refresh_rules_list()
-        
+
         # Update status bar
         self.update_status_bar()
 
