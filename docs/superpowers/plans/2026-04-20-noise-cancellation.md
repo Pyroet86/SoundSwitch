@@ -90,7 +90,7 @@ print('package installed:', os.path.exists(RNNOISE_LADSPA))
 Expected (package installed):
 ```
 RNNOISE_LADSPA: /usr/lib/ladspa/librnnoise_ladspa.so
-safe_id: alsa_input_usb_046d_0825_CC7
+safe_id: alsa_input_usb_046d_0825_CC7CA
 package installed: True
 ```
 
