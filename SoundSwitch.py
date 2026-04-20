@@ -806,6 +806,11 @@ class MainWindow(QMainWindow):
         self.setPalette(dark_palette)
         self.setStyleSheet('QStatusBar { background: #232629; color: #f0f0f0; } QLabel { color: #f0f0f0; } QPushButton { background: #2d2f31; color: #f0f0f0; border: 1px solid #444; border-radius: 4px; padding: 4px 8px; } QPushButton:hover { background: #005f87; color: #fff; }')
 
+    def _italic_font(self):
+        f = self.font()
+        f.setItalic(True)
+        return f
+
     def show_status(self, message, error=False):
         bar = self.statusBar() if hasattr(self, 'statusBar') else None
         if bar:
@@ -1426,14 +1431,31 @@ class MainWindow(QMainWindow):
         self.inputs_list.clear()
         input_sources = self.get_input_sources()
         if input_sources:
+            nc_state = self.state.get('noise_cancel', {})
             for i, source in enumerate(input_sources):
-                item = QListWidgetItem(source['description'])
-                item.setData(Qt.ItemDataRole.UserRole, source['name'])
-                if i % 2 == 0:
-                    item.setBackground(QBrush(QColor('#232629')))
+                mic_name = source['name']
+                label = source['description']
+                bg = QColor('#232629') if i % 2 == 0 else QColor('#2d2f31')
+                if mic_name in nc_state:
+                    item = QListWidgetItem(label)
+                    item.setData(Qt.ItemDataRole.UserRole, mic_name)
+                    item.setBackground(QBrush(bg))
+                    # Append [NC] badge in cyan
+                    item.setText(f'{label} [NC]')
+                    item.setForeground(QBrush(QColor('#00bfff')))
+                    self.inputs_list.addItem(item)
+                    # Non-selectable sub-item showing the virtual source name
+                    virtual_source = nc_state[mic_name].get('virtual_source', '')
+                    sub = QListWidgetItem(f'  ↳ {virtual_source}')
+                    sub.setFlags(Qt.NoItemFlags)
+                    sub.setForeground(QBrush(QColor('#888')))
+                    sub.setFont(self._italic_font())
+                    self.inputs_list.addItem(sub)
                 else:
-                    item.setBackground(QBrush(QColor('#2d2f31')))
-                self.inputs_list.addItem(item)
+                    item = QListWidgetItem(label)
+                    item.setData(Qt.ItemDataRole.UserRole, mic_name)
+                    item.setBackground(QBrush(bg))
+                    self.inputs_list.addItem(item)
         else:
             placeholder = QListWidgetItem('(No microphones found)')
             placeholder.setFlags(Qt.NoItemFlags)
