@@ -915,16 +915,24 @@ class MainWindow(QMainWindow):
                 # Create null sink
                 self.run_pactl(['load-module', 'module-null-sink', f'sink_name={sink}', f'sink_properties=device.description={sink}'])
 
-    def get_sources(self):
-        # Returns a list of dicts with 'index', 'name', 'description'
-        output = self.run_pactl(['list', 'short', 'sources'])
+    def get_input_sources(self):
+        output = self.run_pactl(['list', 'sources'])
         sources = []
-        for line in output.strip().split('\n'):
-            if not line:
-                continue
-            parts = line.split('\t')
-            if len(parts) >= 2:
-                sources.append({'index': parts[0], 'name': parts[1], 'description': parts[1]})
+        current = {}
+        for line in output.splitlines():
+            line = line.strip()
+            if line.startswith('Source #'):
+                if current.get('name') and not current['name'].endswith('.monitor'):
+                    sources.append(current)
+                current = {}
+            elif line.startswith('Name:'):
+                current['name'] = line.split(':', 1)[1].strip()
+            elif line.startswith('device.description ='):
+                current['description'] = line.split('=', 1)[1].strip().strip('"')
+        if current.get('name') and not current['name'].endswith('.monitor'):
+            sources.append(current)
+        for s in sources:
+            s.setdefault('description', s['name'])
         return sources
 
     def get_sinks(self):
