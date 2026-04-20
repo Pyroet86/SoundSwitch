@@ -1294,7 +1294,7 @@ class MainWindow(QMainWindow):
             return
         menu = QMenu(self)
         if not os.path.exists(RNNOISE_LADSPA):
-            action = menu.addAction('Noise Cancellation (package not installed)…')
+            action = menu.addAction('Noise Cancellation (not installed)')
             action.triggered.connect(self.show_rnnoise_install_info)
         else:
             nc = self.state.get('noise_cancel', {}).get(mic_name)
