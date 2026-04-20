@@ -982,6 +982,8 @@ class MainWindow(QMainWindow):
         self.inputs_list.setContentsMargins(0, 0, 0, 0)
         self.inputs_list.setStyleSheet('QListWidget { padding: 8px; }')
         self.inputs_list.setItemDelegate(RoundedBoxDelegate())
+        self.inputs_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.inputs_list.customContextMenuRequested.connect(self.show_input_context_menu)
         inputs_panel.addWidget(inputs_label)
         inputs_panel.addWidget(self.inputs_list)
 
@@ -1282,6 +1284,51 @@ class MainWindow(QMainWindow):
             action = menu.addAction('Reset to Default Behaviour')
             action.triggered.connect(lambda: self.reset_manual_override(stream_index))
             menu.exec_(self.devices_list.viewport().mapToGlobal(pos))
+
+    def show_input_context_menu(self, pos):
+        item = self.inputs_list.itemAt(pos)
+        if not item:
+            return
+        mic_name = item.data(Qt.ItemDataRole.UserRole)
+        if not mic_name:
+            return
+        menu = QMenu(self)
+        if not os.path.exists(RNNOISE_LADSPA):
+            action = menu.addAction('Noise Cancellation (package not installed)…')
+            action.triggered.connect(self.show_rnnoise_install_info)
+        else:
+            nc = self.state.get('noise_cancel', {}).get(mic_name)
+            if nc:
+                settings_action = menu.addAction('Noise Cancellation Settings…')
+                settings_action.triggered.connect(lambda: self.open_noise_cancel_dialog(mic_name))
+                disable_action = menu.addAction('Disable Noise Cancellation')
+                disable_action.triggered.connect(lambda: self.disable_noise_cancellation(mic_name))
+            else:
+                enable_action = menu.addAction('Enable Noise Cancellation…')
+                enable_action.triggered.connect(lambda: self.open_noise_cancel_dialog(mic_name))
+        menu.exec_(self.inputs_list.viewport().mapToGlobal(pos))
+
+    def show_rnnoise_install_info(self):
+        QMessageBox.information(
+            self,
+            'Package Required',
+            'Noise cancellation requires the noise-suppression-for-voice package.\n\n'
+            'Install it with:\n'
+            '    sudo pacman -S noise-suppression-for-voice\n\n'
+            'Then restart SoundSwitch.',
+        )
+
+    def open_noise_cancel_dialog(self, mic_name):
+        sources = self.get_input_sources()
+        mic_description = next(
+            (s['description'] for s in sources if s['name'] == mic_name),
+            mic_name,
+        )
+        current_settings = self.state.get('noise_cancel', {}).get(mic_name, {}).get('settings')
+        dlg = NoiseCancelDialog(mic_name, mic_description, current_settings, parent=self)
+        if dlg.exec_() == QDialog.Accepted:
+            settings = dlg.get_settings()
+            self.enable_noise_cancellation(mic_name, settings['vad_threshold'], settings['channel_mode'])
 
     def reset_manual_override(self, stream_index):
         if stream_index in self.state['manual_overrides']:
