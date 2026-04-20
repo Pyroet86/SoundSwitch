@@ -1095,23 +1095,25 @@ class MainWindow(QMainWindow):
         if 'loopbacks' in self.state and default_sink:
             self.setup_custom_sink_loopbacks(default_sink)
         # Restore noise cancellation
-        nc_entries = self.state.get('noise_cancel', {})
+        nc_entries = dict(self.state.get('noise_cancel', {}))
         if nc_entries:
             active_source_names = {s['name'] for s in self.get_input_sources()}
             to_remove = []
-            for mic_name, entry in list(nc_entries.items()):
+            for mic_name, entry in nc_entries.items():
                 if mic_name not in active_source_names:
                     to_remove.append(mic_name)
                 else:
                     settings = entry.get('settings', {})
                     # Clear stale module IDs before re-enabling so disable() won't
                     # try to unload modules from the previous session.
-                    del nc_entries[mic_name]
+                    del self.state['noise_cancel'][mic_name]
                     self.enable_noise_cancellation(
                         mic_name,
                         settings.get('vad_threshold', 50),
                         settings.get('channel_mode', 'mono'),
                     )
+                    if mic_name not in self.state.get('noise_cancel', {}):
+                        print(f'[SoundSwitch] Warning: failed to restore NC for {mic_name}')
             for mic_name in to_remove:
                 del self.state['noise_cancel'][mic_name]
             if to_remove:
