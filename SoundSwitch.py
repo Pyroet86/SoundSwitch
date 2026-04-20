@@ -31,7 +31,11 @@ RNNOISE_LADSPA = '/usr/lib/ladspa/librnnoise_ladspa.so'
 
 def _safe_mic_id(mic_name):
     """Return a PipeWire-safe sink name component derived from a source name."""
-    return re.sub(r'[^a-zA-Z0-9]', '_', mic_name)[:30]
+    safe = re.sub(r'[^a-zA-Z0-9]', '_', mic_name)
+    if len(safe) <= 30:
+        return safe
+    # Keep last 6 chars so profiles of the same device stay unique (e.g. mono vs stereo suffixes)
+    return safe[:24] + safe[-6:]
 
 class DraggableListWidget(QListWidget):
     def __init__(self, parent=None):
@@ -1148,6 +1152,7 @@ class MainWindow(QMainWindow):
         try:
             null_id = int(null_out.strip())
         except ValueError:
+            self.show_status('Failed to create noise cancellation sink.', error=True)
             return
 
         ladspa_out = self.run_pactl([
@@ -1162,6 +1167,7 @@ class MainWindow(QMainWindow):
             ladspa_id = int(ladspa_out.strip())
         except ValueError:
             self.run_pactl(['unload-module', str(null_id)])
+            self.show_status('Failed to create noise cancellation LADSPA sink.', error=True)
             return
 
         loopback_out = self.run_pactl([
@@ -1176,6 +1182,7 @@ class MainWindow(QMainWindow):
         except ValueError:
             self.run_pactl(['unload-module', str(ladspa_id)])
             self.run_pactl(['unload-module', str(null_id)])
+            self.show_status('Failed to create noise cancellation loopback.', error=True)
             return
 
         self.state.setdefault('noise_cancel', {})[mic_name] = {
