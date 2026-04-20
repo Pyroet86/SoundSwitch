@@ -1100,6 +1100,76 @@ class MainWindow(QMainWindow):
         self.refresh_devices_and_sinks(force=True)
         QMessageBox.information(self, 'Default Sink', f'Set {sink_name} as the default output device and routed custom sinks to it.')
 
+    def enable_noise_cancellation(self, mic_name, vad_threshold, channel_mode):
+        safe_id = _safe_mic_id(mic_name)
+        label = 'noise_suppressor_mono' if channel_mode == 'mono' else 'noise_suppressor_stereo'
+        virtual_source = f'rnnoise_out_{safe_id}.monitor'
+
+        existing = self.state.get('noise_cancel', {}).get(mic_name)
+        if existing:
+            self.disable_noise_cancellation(mic_name)
+
+        null_out = self.run_pactl([
+            'load-module', 'module-null-sink',
+            f'sink_name=rnnoise_out_{safe_id}',
+            f'sink_properties=device.description="{virtual_source}"',
+        ])
+        try:
+            null_id = int(null_out.strip())
+        except ValueError:
+            self.show_status('Failed to create noise cancellation sink.', error=True)
+            return
+
+        ladspa_out = self.run_pactl([
+            'load-module', 'module-ladspa-sink',
+            f'sink_name=rnnoise_ladspa_{safe_id}',
+            f'sink_master=rnnoise_out_{safe_id}',
+            f'label={label}',
+            f'plugin={RNNOISE_LADSPA}',
+            f'control={vad_threshold}',
+        ])
+        try:
+            ladspa_id = int(ladspa_out.strip())
+        except ValueError:
+            self.run_pactl(['unload-module', str(null_id)])
+            self.show_status('Failed to load RNNoise LADSPA plugin.', error=True)
+            return
+
+        loopback_out = self.run_pactl([
+            'load-module', 'module-loopback',
+            f'source={mic_name}',
+            f'sink=rnnoise_ladspa_{safe_id}',
+            'source_dont_move=true',
+            'sink_dont_move=true',
+        ])
+        try:
+            loopback_id = int(loopback_out.strip())
+        except ValueError:
+            self.run_pactl(['unload-module', str(ladspa_id)])
+            self.run_pactl(['unload-module', str(null_id)])
+            self.show_status('Failed to create noise cancellation loopback.', error=True)
+            return
+
+        self.state.setdefault('noise_cancel', {})[mic_name] = {
+            'modules': [null_id, ladspa_id, loopback_id],
+            'settings': {'vad_threshold': vad_threshold, 'channel_mode': channel_mode},
+            'virtual_source': virtual_source,
+        }
+        self.save_state()
+        self.show_status(f'Noise cancellation enabled: {virtual_source}')
+        self.refresh_devices_and_sinks(force=True)
+
+    def disable_noise_cancellation(self, mic_name):
+        nc = self.state.get('noise_cancel', {}).get(mic_name)
+        if not nc:
+            return
+        for mod_id in reversed(nc['modules']):
+            self.run_pactl(['unload-module', str(mod_id)])
+        del self.state['noise_cancel'][mic_name]
+        self.save_state()
+        self.show_status('Noise cancellation disabled.')
+        self.refresh_devices_and_sinks(force=True)
+
     def setup_custom_sink_loopbacks(self, hardware_sink_name):
         # Track loopback module IDs in self.state['loopbacks']
         if 'loopbacks' not in self.state:
