@@ -914,6 +914,9 @@ class MainWindow(QMainWindow):
         right_splitter.addWidget(outputs_widget)
         right_splitter.addWidget(inputs_widget)
         right_splitter.setSizes([300, 300])
+        right_splitter.setStyleSheet(
+            'QSplitter::handle { background: #444; height: 4px; }'
+        )
 
         # Add panels to main layout
         main_layout.addLayout(devices_panel, 2)
