@@ -863,11 +863,22 @@ class MainWindow(QMainWindow):
         # Only refresh UI if state has changed
         sinks = self.get_sinks()
         sink_inputs = self.get_sink_inputs()
+        input_sources = self.get_input_sources()
         default_sink = self.get_default_sink_name()
-        # Build a snapshot: sorted sinks, sorted streams with routing, default sink
+
+        # Clean up NC modules for any mic that has been unplugged
+        if self.state.get('noise_cancel'):
+            active_names = {s['name'] for s in input_sources}
+            for mic_name in list(self.state['noise_cancel'].keys()):
+                if mic_name not in active_names:
+                    self.disable_noise_cancellation(mic_name)
+                    return  # disable triggers its own refresh; let the timer cycle continue
+
+        # Build a snapshot: sorted sinks, sorted streams, sorted input sources, default sink
         snapshot = (
             tuple(sorted((s['index'], s['name']) for s in sinks)),
             tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name')) for s in sink_inputs)),
+            tuple(sorted(s['name'] for s in input_sources)),
             default_sink
         )
         if snapshot != self._last_snapshot:
@@ -1595,12 +1606,19 @@ class MainWindow(QMainWindow):
         self.hide_to_tray()
 
     def real_close(self):
+        self._teardown_nc_modules()
         self.save_state()
         if hasattr(self, '_shortcuts_manager'):
             self._shortcuts_manager.stop()
         if self.tray_icon:
             self.tray_icon.hide()
         QApplication.instance().quit()
+
+    def _teardown_nc_modules(self):
+        """Unload all active NC modules on exit. State is kept so they are recreated on next startup."""
+        for entry in self.state.get('noise_cancel', {}).values():
+            for mod_id in reversed(entry.get('modules', [])):
+                subprocess.run(['pactl', 'unload-module', str(mod_id)], capture_output=True)
 
     def move_sink_input(self, sink_input_index, sink_name):
         # Move the sink input to the selected sink
