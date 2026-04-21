@@ -1192,10 +1192,13 @@ class MainWindow(QMainWindow):
 
         # Remap-source turns the null sink's monitor into a proper input device
         # that applications like Discord can select as a microphone.
+        # Double-quoting the source_properties value lets pactl's tokenizer treat
+        # it as one token; single-quoting the description value inside protects spaces.
         remap_out = self.run_pactl([
             'load-module', 'module-remap-source',
             f'source_name=rnnoise_mic_{safe_id}',
             f'master=rnnoise_out_{safe_id}.monitor',
+            f"source_properties=\"node.description='{friendly_desc}'\"",
         ])
         try:
             remap_id = int(remap_out.strip())
@@ -1205,9 +1208,6 @@ class MainWindow(QMainWindow):
             self.run_pactl(['unload-module', str(null_id)])
             self.show_status('Failed to create noise cancellation virtual microphone.', error=True)
             return
-
-        # Set friendly name via a separate call so spaces in the description work correctly.
-        self.run_pactl(['update-source-proplist', f'rnnoise_mic_{safe_id}', f'device.description="{friendly_desc}"'])
 
         self.state.setdefault('noise_cancel', {})[mic_name] = {
             'modules': [null_id, ladspa_id, loopback_id, remap_id],
