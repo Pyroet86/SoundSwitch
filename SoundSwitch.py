@@ -457,9 +457,8 @@ class NoiseCancelDialog(QDialog):
         mode_row.addStretch()
         layout.addLayout(mode_row)
 
-        layout.addWidget(QLabel('Select this source name in Discord / other apps:'))
-        safe_id = _safe_mic_id(self.mic_name)
-        self._virt_field = QLineEdit(f'rnnoise_out_{safe_id}.monitor')
+        layout.addWidget(QLabel('Select this device in Discord / other apps:'))
+        self._virt_field = QLineEdit(f'{mic_description} (Noise Cancelled)')
         self._virt_field.setReadOnly(True)
         layout.addWidget(self._virt_field)
 
@@ -1101,10 +1100,10 @@ class MainWindow(QMainWindow):
         # Restore noise cancellation
         nc_entries = dict(self.state.get('noise_cancel', {}))
         if nc_entries:
-            active_source_names = {s['name'] for s in self.get_input_sources()}
+            active_sources = {s['name']: s['description'] for s in self.get_input_sources()}
             to_remove = []
             for mic_name, entry in nc_entries.items():
-                if mic_name not in active_source_names:
+                if mic_name not in active_sources:
                     to_remove.append(mic_name)
                 else:
                     settings = entry.get('settings', {})
@@ -1113,6 +1112,7 @@ class MainWindow(QMainWindow):
                     del self.state['noise_cancel'][mic_name]
                     self.enable_noise_cancellation(
                         mic_name,
+                        active_sources[mic_name],
                         settings.get('vad_threshold', 50),
                         settings.get('channel_mode', 'mono'),
                     )
@@ -1135,10 +1135,10 @@ class MainWindow(QMainWindow):
         self.refresh_devices_and_sinks(force=True)
         QMessageBox.information(self, 'Default Sink', f'Set {sink_name} as the default output device and routed custom sinks to it.')
 
-    def enable_noise_cancellation(self, mic_name, vad_threshold, channel_mode):
+    def enable_noise_cancellation(self, mic_name, mic_description, vad_threshold, channel_mode):
         safe_id = _safe_mic_id(mic_name)
         label = 'noise_suppressor_mono' if channel_mode == 'mono' else 'noise_suppressor_stereo'
-        virtual_source = f'rnnoise_out_{safe_id}.monitor'
+        friendly_desc = f'{mic_description} (Noise Cancelled)'
 
         existing = self.state.get('noise_cancel', {}).get(mic_name)
         if existing:
@@ -1147,7 +1147,6 @@ class MainWindow(QMainWindow):
         null_out = self.run_pactl([
             'load-module', 'module-null-sink',
             f'sink_name=rnnoise_out_{safe_id}',
-            f'sink_properties=device.description={virtual_source}',
         ])
         try:
             null_id = int(null_out.strip())
@@ -1185,10 +1184,27 @@ class MainWindow(QMainWindow):
             self.show_status('Failed to create noise cancellation loopback.', error=True)
             return
 
+        # Remap-source turns the null sink's monitor into a proper input device
+        # that applications like Discord can select as a microphone.
+        remap_out = self.run_pactl([
+            'load-module', 'module-remap-source',
+            f'source_name=rnnoise_mic_{safe_id}',
+            f'master=rnnoise_out_{safe_id}.monitor',
+            f'source_properties=device.description="{friendly_desc}"',
+        ])
+        try:
+            remap_id = int(remap_out.strip())
+        except ValueError:
+            self.run_pactl(['unload-module', str(loopback_id)])
+            self.run_pactl(['unload-module', str(ladspa_id)])
+            self.run_pactl(['unload-module', str(null_id)])
+            self.show_status('Failed to create noise cancellation virtual microphone.', error=True)
+            return
+
         self.state.setdefault('noise_cancel', {})[mic_name] = {
-            'modules': [null_id, ladspa_id, loopback_id],
+            'modules': [null_id, ladspa_id, loopback_id, remap_id],
             'settings': {'vad_threshold': vad_threshold, 'channel_mode': channel_mode},
-            'virtual_source': virtual_source,
+            'virtual_source': friendly_desc,
         }
         self.save_state()
         self.show_status(f'Noise cancellation enabled: {virtual_source}')
@@ -1364,7 +1380,7 @@ class MainWindow(QMainWindow):
         dlg = NoiseCancelDialog(mic_name, mic_description, current_settings, parent=self)
         if dlg.exec_() == QDialog.Accepted:
             settings = dlg.get_settings()
-            self.enable_noise_cancellation(mic_name, settings['vad_threshold'], settings['channel_mode'])
+            self.enable_noise_cancellation(mic_name, mic_description, settings['vad_threshold'], settings['channel_mode'])
 
     def reset_manual_override(self, stream_index):
         if stream_index in self.state['manual_overrides']:
