@@ -728,7 +728,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('SoundSwitch - PipeWire Audio Router')
         self.setWindowIcon(create_app_icon())
-        self.resize(1000, 600)
         self.init_menu_bar()
         self.tray_icon = None
         self.tray_menu = None
@@ -756,6 +755,8 @@ class MainWindow(QMainWindow):
         if 'window' in layout_state:
             w = layout_state['window']
             self.setGeometry(w['x'], w['y'], w['width'], w['height'])
+        else:
+            self.resize(1000, 600)
         self.ensure_custom_sinks()
         self.restore_routing_state()
         self.refresh_devices_and_sinks(force=True)
