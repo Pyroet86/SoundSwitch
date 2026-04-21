@@ -866,13 +866,26 @@ class MainWindow(QMainWindow):
         input_sources = self.get_input_sources()
         default_sink = self.get_default_sink_name()
 
-        # Clean up NC modules for any mic that has been unplugged
+        # Handle NC mic plug/unplug events
         if self.state.get('noise_cancel'):
-            active_names = {s['name'] for s in input_sources}
-            for mic_name in list(self.state['noise_cancel'].keys()):
-                if mic_name not in active_names:
-                    self.disable_noise_cancellation(mic_name)
-                    return  # disable triggers its own refresh; let the timer cycle continue
+            active_sources = {s['name']: s['description'] for s in input_sources}
+            for mic_name, entry in list(self.state['noise_cancel'].items()):
+                if mic_name not in active_sources:
+                    if entry.get('modules'):
+                        # Mic unplugged while NC active — unload modules, keep settings
+                        self.disable_noise_cancellation(mic_name, keep_settings=True)
+                        return
+                elif not entry.get('modules'):
+                    # Mic re-plugged with saved NC settings — restore NC
+                    settings = entry.get('settings', {})
+                    del self.state['noise_cancel'][mic_name]
+                    self.enable_noise_cancellation(
+                        mic_name,
+                        active_sources[mic_name],
+                        settings.get('vad_threshold', 50),
+                        settings.get('channel_mode', 'mono'),
+                    )
+                    return
 
         # Build a snapshot: sorted sinks, sorted streams, sorted input sources, default sink
         snapshot = (
@@ -1230,15 +1243,18 @@ class MainWindow(QMainWindow):
         self.show_status(f'Noise cancellation enabled: {friendly_desc}')
         self.refresh_devices_and_sinks(force=True)
 
-    def disable_noise_cancellation(self, mic_name):
+    def disable_noise_cancellation(self, mic_name, keep_settings=False):
         nc = self.state.get('noise_cancel', {}).get(mic_name)
         if not nc:
             return
         for mod_id in reversed(nc['modules']):
             self.run_pactl(['unload-module', str(mod_id)])
-        del self.state['noise_cancel'][mic_name]
+        if keep_settings:
+            self.state['noise_cancel'][mic_name]['modules'] = []
+        else:
+            del self.state['noise_cancel'][mic_name]
+            self.show_status('Noise cancellation disabled.')
         self.save_state()
-        self.show_status('Noise cancellation disabled.')
         self.refresh_devices_and_sinks(force=True)
 
     def setup_custom_sink_loopbacks(self, hardware_sink_name):
@@ -1505,14 +1521,15 @@ class MainWindow(QMainWindow):
                 mic_name = source['name']
                 label = source['description']
                 bg = QColor('#232629') if i % 2 == 0 else QColor('#2d2f31')
-                display = f'{label} [NC]' if mic_name in nc_state else label
+                nc_active = bool(nc_state.get(mic_name, {}).get('modules'))
+                display = f'{label} [NC]' if nc_active else label
                 item = QListWidgetItem(display)
                 item.setData(Qt.ItemDataRole.UserRole, mic_name)
                 item.setBackground(QBrush(bg))
-                if mic_name in nc_state:
+                if nc_active:
                     item.setForeground(QBrush(QColor('#00bfff')))
                 self.inputs_list.addItem(item)
-                if mic_name in nc_state:
+                if nc_active:
                     virtual_source = nc_state[mic_name].get('virtual_source', '')
                     sub = QListWidgetItem(f'  ↳ {virtual_source}')
                     sub.setFlags(Qt.NoItemFlags)
