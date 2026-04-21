@@ -899,11 +899,6 @@ class MainWindow(QMainWindow):
             self._last_snapshot = snapshot
 
     def init_ui(self):
-        main_widget = QWidget()
-        main_layout = QHBoxLayout()
-        main_widget.setLayout(main_layout)
-        self.setCentralWidget(main_widget)
-
         # Left panel: vertical splitter — streams (top) / rules (bottom)
         self._splitter_left = QSplitter(Qt.Vertical)
         self._splitter_left.setStyleSheet('QSplitter::handle { background: #444; height: 4px; }')
@@ -988,7 +983,7 @@ class MainWindow(QMainWindow):
         center_layout.addWidget(self._splitter_center)
 
         # Right panel — splitter with Output Devices (top) and Input Devices (bottom)
-        right_splitter = QSplitter(Qt.Vertical)
+        self._splitter_right = QSplitter(Qt.Vertical)
 
         # Output Devices widget
         outputs_widget = QWidget()
@@ -1028,19 +1023,19 @@ class MainWindow(QMainWindow):
         inputs_panel.addWidget(inputs_label)
         inputs_panel.addWidget(self.inputs_list)
 
-        right_splitter.addWidget(outputs_widget)
-        right_splitter.addWidget(inputs_widget)
-        right_splitter.setSizes([300, 300])
-        right_splitter.setStyleSheet(
+        self._splitter_right.addWidget(outputs_widget)
+        self._splitter_right.addWidget(inputs_widget)
+        self._splitter_right.setStyleSheet(
             'QSplitter::handle { background: #444; height: 4px; }'
         )
 
-        # Add panels to main layout
-        main_layout.addWidget(self._splitter_left, 2)
-        main_layout.addSpacing(16)
-        main_layout.addWidget(center_widget, 3)
-        main_layout.addSpacing(16)
-        main_layout.addWidget(right_splitter, 2)
+        # Root horizontal splitter
+        self._splitter_main = QSplitter(Qt.Horizontal)
+        self._splitter_main.setStyleSheet('QSplitter::handle { background: #444; width: 4px; }')
+        self._splitter_main.addWidget(self._splitter_left)
+        self._splitter_main.addWidget(center_widget)
+        self._splitter_main.addWidget(self._splitter_right)
+        self.setCentralWidget(self._splitter_main)
 
     def run_pactl(self, args):
         try:
