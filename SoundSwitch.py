@@ -1081,7 +1081,9 @@ class MainWindow(QMainWindow):
                 current['sink'] = line.split(':', 1)[1].strip()
         if current:
             inputs.append(current)
-        return inputs
+        return [s for s in inputs
+                if not s.get('app_name', '').startswith('rnnoise_')
+                and not s.get('media_name', '').startswith('rnnoise_')]
 
     def get_default_sink_name(self):
         # Get the current default sink name using pactl info
@@ -1181,6 +1183,7 @@ class MainWindow(QMainWindow):
             f'sink=rnnoise_ladspa_{safe_id}',
             'source_dont_move=true',
             'sink_dont_move=true',
+            'sink_input_properties=node.hidden=true',
         ])
         try:
             loopback_id = int(loopback_out.strip())
