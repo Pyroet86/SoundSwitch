@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
-    QSpinBox, QCheckBox, QSplitter, QSlider,
+    QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
@@ -723,6 +723,28 @@ def create_app_icon():
     return QIcon(pixmap)
 
 
+class _SplitterHandle(QSplitterHandle):
+    """Paints a solid divider bar, bypassing the platform style renderer."""
+    def __init__(self, orientation, parent, color='#666'):
+        super().__init__(orientation, parent)
+        self._color = QColor(color)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self._color)
+
+
+class StyledSplitter(QSplitter):
+    """QSplitter with a reliably visible handle regardless of platform theme."""
+    def __init__(self, orientation, handle_width=6, color='#666', parent=None):
+        super().__init__(orientation, parent)
+        self._handle_color = color
+        self.setHandleWidth(handle_width)
+
+    def createHandle(self):
+        return _SplitterHandle(self.orientation(), self, self._handle_color)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, start_minimized=False):
         super().__init__()
@@ -905,8 +927,7 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         # Left panel: vertical splitter — streams (top) / rules (bottom)
-        self._splitter_left = QSplitter(Qt.Vertical)
-        self._splitter_left.setStyleSheet('QSplitter::handle { background: #666; height: 6px; }')
+        self._splitter_left = StyledSplitter(Qt.Vertical)
 
         streams_widget = QWidget()
         streams_layout = QVBoxLayout(streams_widget)
@@ -964,8 +985,7 @@ class MainWindow(QMainWindow):
         sinks_label.setStyleSheet('margin-bottom: 4px;')
         center_layout.addWidget(sinks_label)
 
-        self._splitter_center = QSplitter(Qt.Vertical)
-        self._splitter_center.setStyleSheet('QSplitter::handle { background: #666; height: 6px; }')
+        self._splitter_center = StyledSplitter(Qt.Vertical)
         self.sink_lists = {}
         for sink in CUSTOM_SINKS:
             pane = QWidget()
@@ -988,7 +1008,7 @@ class MainWindow(QMainWindow):
         center_layout.addWidget(self._splitter_center)
 
         # Right panel — splitter with Output Devices (top) and Input Devices (bottom)
-        self._splitter_right = QSplitter(Qt.Vertical)
+        self._splitter_right = StyledSplitter(Qt.Vertical)
 
         # Output Devices widget
         outputs_widget = QWidget()
@@ -1030,11 +1050,10 @@ class MainWindow(QMainWindow):
 
         self._splitter_right.addWidget(outputs_widget)
         self._splitter_right.addWidget(inputs_widget)
-        self._splitter_right.setStyleSheet('QSplitter::handle { background: #666; height: 6px; }')
+
 
         # Root horizontal splitter
-        self._splitter_main = QSplitter(Qt.Horizontal)
-        self._splitter_main.setStyleSheet('QSplitter::handle { background: #666; width: 8px; }')
+        self._splitter_main = StyledSplitter(Qt.Horizontal, handle_width=8)
         self._splitter_main.addWidget(self._splitter_left)
         self._splitter_main.addWidget(center_widget)
         self._splitter_main.addWidget(self._splitter_right)
