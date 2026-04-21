@@ -752,6 +752,10 @@ class MainWindow(QMainWindow):
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
         self.init_ui()
+        layout_state = self.state.get('layout', {})
+        if 'window' in layout_state:
+            w = layout_state['window']
+            self.setGeometry(w['x'], w['y'], w['width'], w['height'])
         self.ensure_custom_sinks()
         self.restore_routing_state()
         self.refresh_devices_and_sinks(force=True)
@@ -1036,6 +1040,12 @@ class MainWindow(QMainWindow):
         self._splitter_main.addWidget(center_widget)
         self._splitter_main.addWidget(self._splitter_right)
         self.setCentralWidget(self._splitter_main)
+
+        layout_state = self.state.get('layout', {})
+        self._splitter_main.setSizes(layout_state.get('splitter_main', [280, 420, 280]))
+        self._splitter_left.setSizes(layout_state.get('splitter_left', [300, 250]))
+        self._splitter_center.setSizes(layout_state.get('splitter_center', [120, 120, 120, 120]))
+        self._splitter_right.setSizes(layout_state.get('splitter_right', [300, 300]))
 
     def run_pactl(self, args):
         try:
