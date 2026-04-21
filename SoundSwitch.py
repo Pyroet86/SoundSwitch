@@ -1522,7 +1522,7 @@ class MainWindow(QMainWindow):
                 label = source['description']
                 bg = QColor('#232629') if i % 2 == 0 else QColor('#2d2f31')
                 nc_active = bool(nc_state.get(mic_name, {}).get('modules'))
-                display = f'{label} [NC]' if nc_active else label
+                display = f'[NC] {label}' if nc_active else label
                 item = QListWidgetItem(display)
                 item.setData(Qt.ItemDataRole.UserRole, mic_name)
                 item.setBackground(QBrush(bg))
@@ -1531,7 +1531,7 @@ class MainWindow(QMainWindow):
                 self.inputs_list.addItem(item)
                 if nc_active:
                     virtual_source = nc_state[mic_name].get('virtual_source', '')
-                    sub = QListWidgetItem(f'  ↳ {virtual_source}')
+                    sub = QListWidgetItem(f'        ↳ {virtual_source}')
                     sub.setFlags(Qt.NoItemFlags)
                     sub.setBackground(QBrush(bg))
                     sub.setForeground(QBrush(QColor('#888')))
