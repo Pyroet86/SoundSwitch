@@ -1151,7 +1151,7 @@ class MainWindow(QMainWindow):
         null_out = self.run_pactl([
             'load-module', 'module-null-sink',
             f'sink_name=rnnoise_out_{safe_id}',
-            'sink_properties=node.hidden=true',
+            'sink_properties="device.class=filter node.hidden=true"',
         ])
         try:
             null_id = int(null_out.strip())
@@ -1166,7 +1166,7 @@ class MainWindow(QMainWindow):
             f'label={label}',
             f'plugin={RNNOISE_LADSPA}',
             f'control={vad_threshold}',
-            'sink_properties=node.hidden=true',
+            'sink_properties="device.class=filter node.hidden=true"',
         ])
         try:
             ladspa_id = int(ladspa_out.strip())
