@@ -1058,7 +1058,7 @@ class MainWindow(QMainWindow):
             if not line:
                 continue
             parts = line.split('\t')
-            if len(parts) >= 2 and not parts[1].startswith('rnnoise_'):
+            if len(parts) >= 2:
                 sinks.append({'index': parts[0], 'name': parts[1], 'description': parts[1]})
         return sinks
 
@@ -1081,9 +1081,7 @@ class MainWindow(QMainWindow):
                 current['sink'] = line.split(':', 1)[1].strip()
         if current:
             inputs.append(current)
-        return [s for s in inputs
-                if not s.get('app_name', '').startswith('rnnoise_')
-                and not s.get('media_name', '').startswith('rnnoise_')]
+        return inputs
 
     def get_default_sink_name(self):
         # Get the current default sink name using pactl info
@@ -1426,8 +1424,10 @@ class MainWindow(QMainWindow):
         self.save_state()
         # Auto-routing logic
         self.apply_routing_rules()
-        # Application Streams panel: show current sink for each stream, skip hidden
-        for i, stream in enumerate([s for s in sink_inputs if s['index'] not in self.hidden_streams]):
+        # Application Streams panel: show current sink for each stream, skip hidden and rnnoise_ internal streams
+        for i, stream in enumerate([s for s in sink_inputs
+                                     if s['index'] not in self.hidden_streams
+                                     and not s.get('sink_name', '').startswith('rnnoise_')]):
             main_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']}) - {stream.get('sink_name', 'Unknown')}"
             sub_label = stream.get('media_name', '')
             item = QListWidgetItem()
@@ -1469,7 +1469,7 @@ class MainWindow(QMainWindow):
         # Outputs panel: show all sinks (hardware and custom), highlight default, skip hidden sinks
         if hasattr(self, 'outputs_delegate'):
             self.outputs_delegate.default_sink_name = self.get_default_sink_name()
-        for i, sink in enumerate([s for s in sinks if s['name'] not in self.hidden_sinks]):
+        for i, sink in enumerate([s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]):
             name = sink['name']
             label = f"{name}"
             if name == self.get_default_sink_name():
