@@ -954,36 +954,38 @@ class MainWindow(QMainWindow):
         self._splitter_left.addWidget(streams_widget)
         self._splitter_left.addWidget(rules_widget)
 
-        # Sinks panel (now stacked vertically)
-        sinks_panel = QVBoxLayout()
+        # Center panel: heading + vertical splitter for 4 sinks
+        center_widget = QWidget()
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(0)
         sinks_label = QLabel('Audio Sinks')
         sinks_label.setFont(QFont('', 12, QFont.Bold))
         sinks_label.setStyleSheet('margin-bottom: 4px;')
-        sinks_panel.addWidget(sinks_label)
+        center_layout.addWidget(sinks_label)
+
+        self._splitter_center = QSplitter(Qt.Vertical)
+        self._splitter_center.setStyleSheet('QSplitter::handle { background: #444; height: 4px; }')
         self.sink_lists = {}
         for sink in CUSTOM_SINKS:
-            vbox = QVBoxLayout()
-            vbox.setSpacing(0)
+            pane = QWidget()
+            pane_layout = QVBoxLayout(pane)
+            pane_layout.setSpacing(0)
+            pane_layout.setContentsMargins(0, 0, 0, 0)
             label = QLabel(sink)
             label.setAlignment(Qt.AlignCenter)
             label.setFont(QFont('', 11, QFont.Bold))
             label.setStyleSheet('margin: 0px; padding: 0px;')
-            vbox.addWidget(label)
+            pane_layout.addWidget(label)
             sink_list = SinkDropListWidget(sink, self.move_sink_input)
             sink_list.setItemDelegate(RoundedBoxDelegate(padding=12))
             sink_list.setStyleSheet('QListWidget { margin: 0px; padding: 0px; border: none; }')
-            # Fixed height for 5 items
-            option = QStyleOptionViewItem()
-            item_height = sink_list.itemDelegate().sizeHint(option, sink_list.model().index(0, 0)).height() if sink_list.itemDelegate() else 36
-            visible_items = 5
-            total_height = visible_items * item_height + 8
-            sink_list.setMinimumHeight(total_height)
-            sink_list.setMaximumHeight(total_height)
+            pane.setMinimumHeight(80)
             sink_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-            vbox.addWidget(sink_list)
+            pane_layout.addWidget(sink_list)
             self.sink_lists[sink] = sink_list
-            sinks_panel.addLayout(vbox)
-        sinks_panel.addSpacing(0)
+            self._splitter_center.addWidget(pane)
+        center_layout.addWidget(self._splitter_center)
 
         # Right panel — splitter with Output Devices (top) and Input Devices (bottom)
         right_splitter = QSplitter(Qt.Vertical)
@@ -1036,7 +1038,7 @@ class MainWindow(QMainWindow):
         # Add panels to main layout
         main_layout.addWidget(self._splitter_left, 2)
         main_layout.addSpacing(16)
-        main_layout.addLayout(sinks_panel, 3)
+        main_layout.addWidget(center_widget, 3)
         main_layout.addSpacing(16)
         main_layout.addWidget(right_splitter, 2)
 
