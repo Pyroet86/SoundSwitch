@@ -906,7 +906,7 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         # Left panel: vertical splitter — streams (top) / rules (bottom)
         self._splitter_left = QSplitter(Qt.Vertical)
-        self._splitter_left.setStyleSheet('QSplitter::handle { background: #444; height: 4px; }')
+        self._splitter_left.setStyleSheet('QSplitter::handle { background: #666; height: 6px; }')
 
         streams_widget = QWidget()
         streams_layout = QVBoxLayout(streams_widget)
@@ -965,7 +965,7 @@ class MainWindow(QMainWindow):
         center_layout.addWidget(sinks_label)
 
         self._splitter_center = QSplitter(Qt.Vertical)
-        self._splitter_center.setStyleSheet('QSplitter::handle { background: #444; height: 4px; }')
+        self._splitter_center.setStyleSheet('QSplitter::handle { background: #666; height: 6px; }')
         self.sink_lists = {}
         for sink in CUSTOM_SINKS:
             pane = QWidget()
@@ -1030,9 +1030,7 @@ class MainWindow(QMainWindow):
 
         self._splitter_right.addWidget(outputs_widget)
         self._splitter_right.addWidget(inputs_widget)
-        self._splitter_right.setStyleSheet(
-            'QSplitter::handle { background: #444; height: 4px; }'
-        )
+        self._splitter_right.setStyleSheet('QSplitter::handle { background: #666; height: 6px; }')
 
         # Root horizontal splitter
         self._splitter_main = QSplitter(Qt.Horizontal)
