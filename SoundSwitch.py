@@ -904,8 +904,13 @@ class MainWindow(QMainWindow):
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
 
-        # Devices panel
-        devices_panel = QVBoxLayout()
+        # Left panel: vertical splitter — streams (top) / rules (bottom)
+        self._splitter_left = QSplitter(Qt.Vertical)
+        self._splitter_left.setStyleSheet('QSplitter::handle { background: #444; height: 4px; }')
+
+        streams_widget = QWidget()
+        streams_layout = QVBoxLayout(streams_widget)
+        streams_layout.setContentsMargins(0, 0, 0, 0)
         devices_label = QLabel('Application Streams')
         devices_label.setFont(QFont('', 12, QFont.Bold))
         devices_label.setStyleSheet('margin-bottom: 8px;')
@@ -913,24 +918,22 @@ class MainWindow(QMainWindow):
         self.devices_list.setItemDelegate(RoundedBoxDelegate())
         self.devices_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.devices_list.customContextMenuRequested.connect(self.show_stream_context_menu)
-        devices_panel.addWidget(devices_label)
-        devices_panel.addWidget(self.devices_list)
         self.refresh_btn = QPushButton('Refresh')
         self.refresh_btn.clicked.connect(lambda: self.refresh_devices_and_sinks(force=True))
-        devices_panel.addWidget(self.refresh_btn)
-        devices_panel.addSpacing(10)
+        streams_layout.addWidget(devices_label)
+        streams_layout.addWidget(self.devices_list)
+        streams_layout.addWidget(self.refresh_btn)
 
-        # Rules panel
+        rules_widget = QWidget()
+        rules_layout = QVBoxLayout(rules_widget)
+        rules_layout.setContentsMargins(0, 0, 0, 0)
         rules_label = QLabel('Auto-Routing Rules')
         rules_label.setFont(QFont('', 11, QFont.Bold))
         rules_label.setStyleSheet('margin-bottom: 4px;')
-        devices_panel.addWidget(rules_label)
         self.rules_list = QListWidget()
         self.rules_list.setAlternatingRowColors(True)
         self.rules_list.setSelectionMode(QListWidget.SingleSelection)
         self.rules_list.setStyleSheet('QListWidget { padding: 4px; }')
-        devices_panel.addWidget(self.rules_list)
-        # Add rule controls
         rule_controls = QHBoxLayout()
         self.rule_app_input = QLineEdit()
         self.rule_app_input.setPlaceholderText('App name (e.g. Firefox)')
@@ -944,8 +947,12 @@ class MainWindow(QMainWindow):
         rule_controls.addWidget(self.rule_sink_combo)
         rule_controls.addWidget(self.add_rule_btn)
         rule_controls.addWidget(self.remove_rule_btn)
-        devices_panel.addLayout(rule_controls)
-        devices_panel.addSpacing(10)
+        rules_layout.addWidget(rules_label)
+        rules_layout.addWidget(self.rules_list)
+        rules_layout.addLayout(rule_controls)
+
+        self._splitter_left.addWidget(streams_widget)
+        self._splitter_left.addWidget(rules_widget)
 
         # Sinks panel (now stacked vertically)
         sinks_panel = QVBoxLayout()
@@ -1027,7 +1034,7 @@ class MainWindow(QMainWindow):
         )
 
         # Add panels to main layout
-        main_layout.addLayout(devices_panel, 2)
+        main_layout.addWidget(self._splitter_left, 2)
         main_layout.addSpacing(16)
         main_layout.addLayout(sinks_panel, 3)
         main_layout.addSpacing(16)
