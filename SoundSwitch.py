@@ -1035,14 +1035,16 @@ class MainWindow(QMainWindow):
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Source #'):
-                if current.get('name') and not current['name'].endswith('.monitor'):
+                name = current.get('name', '')
+                if name and not name.endswith('.monitor') and not name.startswith('rnnoise_'):
                     sources.append(current)
                 current = {}
             elif line.startswith('Name:'):
                 current['name'] = line.split(':', 1)[1].strip()
             elif line.startswith('Description:'):
                 current['description'] = line.split(':', 1)[1].strip()
-        if current.get('name') and not current['name'].endswith('.monitor'):
+        name = current.get('name', '')
+        if name and not name.endswith('.monitor') and not name.startswith('rnnoise_'):
             sources.append(current)
         for s in sources:
             s.setdefault('description', s['name'])
@@ -1056,7 +1058,7 @@ class MainWindow(QMainWindow):
             if not line:
                 continue
             parts = line.split('\t')
-            if len(parts) >= 2:
+            if len(parts) >= 2 and not parts[1].startswith('rnnoise_'):
                 sinks.append({'index': parts[0], 'name': parts[1], 'description': parts[1]})
         return sinks
 
@@ -1107,8 +1109,10 @@ class MainWindow(QMainWindow):
                     to_remove.append(mic_name)
                 else:
                     settings = entry.get('settings', {})
-                    # Clear stale module IDs before re-enabling so disable() won't
-                    # try to unload modules from the previous session.
+                    # Unload modules from the previous session silently — they may still
+                    # be loaded in PipeWire even after SoundSwitch exited.
+                    for mod_id in reversed(entry.get('modules', [])):
+                        subprocess.run(['pactl', 'unload-module', str(mod_id)], capture_output=True)
                     del self.state['noise_cancel'][mic_name]
                     self.enable_noise_cancellation(
                         mic_name,
@@ -1147,6 +1151,7 @@ class MainWindow(QMainWindow):
         null_out = self.run_pactl([
             'load-module', 'module-null-sink',
             f'sink_name=rnnoise_out_{safe_id}',
+            'sink_properties=node.hidden=true',
         ])
         try:
             null_id = int(null_out.strip())
@@ -1161,6 +1166,7 @@ class MainWindow(QMainWindow):
             f'label={label}',
             f'plugin={RNNOISE_LADSPA}',
             f'control={vad_threshold}',
+            'sink_properties=node.hidden=true',
         ])
         try:
             ladspa_id = int(ladspa_out.strip())
@@ -1190,7 +1196,6 @@ class MainWindow(QMainWindow):
             'load-module', 'module-remap-source',
             f'source_name=rnnoise_mic_{safe_id}',
             f'master=rnnoise_out_{safe_id}.monitor',
-            f'source_properties=device.description="{friendly_desc}"',
         ])
         try:
             remap_id = int(remap_out.strip())
@@ -1200,6 +1205,9 @@ class MainWindow(QMainWindow):
             self.run_pactl(['unload-module', str(null_id)])
             self.show_status('Failed to create noise cancellation virtual microphone.', error=True)
             return
+
+        # Set friendly name via a separate call so spaces in the description work correctly.
+        self.run_pactl(['set-source-property', f'rnnoise_mic_{safe_id}', 'device.description', friendly_desc])
 
         self.state.setdefault('noise_cancel', {})[mic_name] = {
             'modules': [null_id, ladspa_id, loopback_id, remap_id],
