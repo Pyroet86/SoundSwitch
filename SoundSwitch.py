@@ -1036,7 +1036,7 @@ class MainWindow(QMainWindow):
 
         # Root horizontal splitter
         self._splitter_main = QSplitter(Qt.Horizontal)
-        self._splitter_main.setStyleSheet('QSplitter::handle { background: #444; width: 4px; }')
+        self._splitter_main.setStyleSheet('QSplitter::handle { background: #666; width: 8px; }')
         self._splitter_main.addWidget(self._splitter_left)
         self._splitter_main.addWidget(center_widget)
         self._splitter_main.addWidget(self._splitter_right)
