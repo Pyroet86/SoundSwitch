@@ -1207,7 +1207,7 @@ class MainWindow(QMainWindow):
             'virtual_source': friendly_desc,
         }
         self.save_state()
-        self.show_status(f'Noise cancellation enabled: {virtual_source}')
+        self.show_status(f'Noise cancellation enabled: {friendly_desc}')
         self.refresh_devices_and_sinks(force=True)
 
     def disable_noise_cancellation(self, mic_name):
