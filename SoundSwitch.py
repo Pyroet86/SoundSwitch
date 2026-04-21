@@ -1207,7 +1207,7 @@ class MainWindow(QMainWindow):
             return
 
         # Set friendly name via a separate call so spaces in the description work correctly.
-        self.run_pactl(['set-source-property', f'rnnoise_mic_{safe_id}', 'device.description', friendly_desc])
+        self.run_pactl(['update-source-proplist', f'rnnoise_mic_{safe_id}', f'device.description="{friendly_desc}"'])
 
         self.state.setdefault('noise_cancel', {})[mic_name] = {
             'modules': [null_id, ladspa_id, loopback_id, remap_id],
