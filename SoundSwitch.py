@@ -1628,6 +1628,16 @@ class MainWindow(QMainWindow):
 
     def real_close(self):
         self._teardown_nc_modules()
+        self.state['layout'] = {
+            'window': {
+                'x': self.x(), 'y': self.y(),
+                'width': self.width(), 'height': self.height(),
+            },
+            'splitter_main':   list(self._splitter_main.sizes()),
+            'splitter_left':   list(self._splitter_left.sizes()),
+            'splitter_center': list(self._splitter_center.sizes()),
+            'splitter_right':  list(self._splitter_right.sizes()),
+        }
         self.save_state()
         if hasattr(self, '_shortcuts_manager'):
             self._shortcuts_manager.stop()
