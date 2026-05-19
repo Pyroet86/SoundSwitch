@@ -579,6 +579,7 @@ class RulesDialog(QDialog):
         right.addWidget(QLabel('App name:'))
         self._app_input = QLineEdit()
         self._app_input.setPlaceholderText('App name e.g. Firefox')
+        self._app_input.returnPressed.connect(self._save_rule)
         right.addWidget(self._app_input)
 
         right.addWidget(QLabel('Route to:'))
@@ -638,6 +639,7 @@ class RulesDialog(QDialog):
     def _save_rule(self):
         app_name = self._app_input.text().strip()
         if not app_name:
+            QMessageBox.warning(self, 'Missing App Name', 'Please enter an app name.')
             return
         sink = self._sink_combo.currentText()
         row = self._list.currentRow()
