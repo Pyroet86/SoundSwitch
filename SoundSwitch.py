@@ -1533,12 +1533,6 @@ class MainWindow(QMainWindow):
                 else:
                     stream_item.setBackground(QBrush(QColor('#2d2f31')))
                 sink_list.addItem(stream_item)
-            # Placeholder for empty list
-            if sink_list.count() == 0:
-                placeholder = QListWidgetItem('(No streams)')
-                placeholder.setFlags(Qt.NoItemFlags)
-                placeholder.setForeground(QBrush(QColor('#555')))
-                sink_list.addItem(placeholder)
         # Outputs panel: per-item widget with inline set-default button for non-default sinks
         default_sink = self.get_default_sink_name()
         visible_sinks = [s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]
