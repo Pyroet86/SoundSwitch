@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
 from PyQt5 import QtCore, QtGui
 
 try:
@@ -173,6 +173,56 @@ class RoundedBoxDelegate(QStyledItemDelegate):
         data = index.data(Qt.UserRole + 1)
         if data and isinstance(data, dict) and data.get('sub'):
             return base.expandedTo(QtCore.QSize(base.width(), 48))
+        return base.expandedTo(QtCore.QSize(base.width(), 36))
+
+
+class RuleItemDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        painter.save()
+        rect = option.rect.adjusted(4, 4, -4, -4)
+        radius = 10
+        if option.state & QStyle.State_Selected:
+            bg = QColor('#005f87')
+            border = QColor('#fff')
+        elif option.state & QStyle.State_MouseOver:
+            bg = QColor('#2d4157')
+            border = QColor('#444')
+        else:
+            bg = QColor('#232629') if index.row() % 2 == 0 else QColor('#2d2f31')
+            border = QColor('#444')
+        painter.setRenderHint(painter.Antialiasing)
+        painter.setBrush(bg)
+        painter.setPen(border)
+        painter.drawRoundedRect(rect, radius, radius)
+        data = index.data(Qt.UserRole)
+        if not data or not isinstance(data, dict):
+            painter.restore()
+            return
+        app_name = data.get('app_name', '')
+        sink = data.get('sink', '')
+        base_font = QFont(option.font)
+        base_font.setPointSize(10)
+        fm_normal = QFontMetrics(base_font)
+        bold_font = QFont(base_font)
+        bold_font.setBold(True)
+        fm_bold = QFontMetrics(bold_font)
+        x = rect.x() + 10
+        y = rect.y() + (rect.height() + fm_normal.ascent() - fm_normal.descent()) // 2
+        segments = [
+            ('If audio stream is ', base_font, fm_normal, QColor('#f0f0f0')),
+            (app_name,             bold_font,  fm_bold,   QColor('#00bfff')),
+            (' route to ',         base_font,  fm_normal, QColor('#f0f0f0')),
+            (sink,                 bold_font,  fm_bold,   QColor('#00bfff')),
+        ]
+        for text, font, fm, color in segments:
+            painter.setFont(font)
+            painter.setPen(color)
+            painter.drawText(x, y, text)
+            x += fm.horizontalAdvance(text)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        base = super().sizeHint(option, index)
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
 
