@@ -610,18 +610,20 @@ class RulesDialog(QDialog):
         self._refresh_list()
 
     def _refresh_list(self):
+        self._list.blockSignals(True)
         self._list.clear()
         for rule in self.state.get('rules', []):
             item = QListWidgetItem()
             item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
             item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
             self._list.addItem(item)
+        self._list.blockSignals(False)
 
     def _on_row_changed(self, row):
         if row < 0:
             self._delete_btn.setEnabled(False)
             return
-        rule = self.state['rules'][row]
+        rule = self.state.get('rules', [])[row]
         self._app_input.setText(rule['app_name'])
         idx = CUSTOM_SINKS.index(rule['sink']) if rule['sink'] in CUSTOM_SINKS else 0
         self._sink_combo.setCurrentIndex(idx)
@@ -642,6 +644,10 @@ class RulesDialog(QDialog):
         if row >= 0:
             self.state['rules'][row] = {'app_name': app_name, 'sink': sink}
         else:
+            existing = [r for r in self.state.get('rules', []) if r['app_name'].lower() == app_name.lower()]
+            if existing:
+                QMessageBox.warning(self, 'Duplicate Rule', f"A rule for '{app_name}' already exists.")
+                return
             self.state['rules'].append({'app_name': app_name, 'sink': sink})
         self._save_state_cb()
         self._refresh_rules_cb()
