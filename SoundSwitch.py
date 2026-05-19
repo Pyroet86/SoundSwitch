@@ -642,6 +642,13 @@ class RulesDialog(QDialog):
         sink = self._sink_combo.currentText()
         row = self._list.currentRow()
         if row >= 0:
+            duplicate = [
+                i for i, r in enumerate(self.state.get('rules', []))
+                if r['app_name'].lower() == app_name.lower() and i != row
+            ]
+            if duplicate:
+                QMessageBox.warning(self, 'Duplicate Rule', f"A rule for '{app_name}' already exists.")
+                return
             self.state['rules'][row] = {'app_name': app_name, 'sink': sink}
         else:
             existing = [r for r in self.state.get('rules', []) if r['app_name'].lower() == app_name.lower()]
@@ -1928,7 +1935,12 @@ class MainWindow(QMainWindow):
         OSDSettingsDialog(self.state, on_apply, parent=self).exec_()
 
     def open_rules_dialog(self):
-        RulesDialog(self.state, self.save_state, self.refresh_rules_list, parent=self).exec_()
+        RulesDialog(
+            self.state,
+            self.save_state,
+            lambda: self.refresh_devices_and_sinks(force=True),
+            parent=self,
+        ).exec_()
 
     def open_settings(self):
         SettingsDialog(parent=self).exec_()
