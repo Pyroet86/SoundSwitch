@@ -27,6 +27,12 @@ except ImportError:
 
 STATE_FILE = 'routing_state.json'
 CUSTOM_SINKS = ['Game', 'Media', 'Chat', 'Aux']
+SINK_COLORS = {
+    'Game':  '#ff6b6b',
+    'Media': '#69db7c',
+    'Chat':  '#4dabf7',
+    'Aux':   '#da77f2',
+}
 RNNOISE_LADSPA = '/usr/lib/ladspa/librnnoise_ladspa.so'
 
 def _safe_mic_id(mic_name):
@@ -208,11 +214,12 @@ class RuleItemDelegate(QStyledItemDelegate):
         fm_bold = QFontMetrics(bold_font)
         x = rect.x() + 10
         y = rect.y() + (rect.height() + max(fm_normal.ascent(), fm_bold.ascent()) - fm_normal.descent()) // 2
+        sink_color = QColor(SINK_COLORS.get(sink, '#00bfff'))
         segments = [
             ('If audio stream is ', base_font, fm_normal, QColor('#f0f0f0')),
             (app_name,             bold_font,  fm_bold,   QColor('#00bfff')),
             (' route to ',         base_font,  fm_normal, QColor('#f0f0f0')),
-            (sink,                 bold_font,  fm_bold,   QColor('#00bfff')),
+            (sink,                 bold_font,  fm_bold,   sink_color),
         ]
         painter.setClipRect(rect)
         for text, font, fm, color in segments:
@@ -1181,7 +1188,7 @@ class MainWindow(QMainWindow):
             label = QLabel(sink)
             label.setAlignment(Qt.AlignCenter)
             label.setFont(QFont('', 11, QFont.Bold))
-            label.setStyleSheet('margin: 0px; padding: 0px;')
+            label.setStyleSheet(f'margin: 0px; padding: 0px; color: {SINK_COLORS[sink]};')
             pane_layout.addWidget(label)
             sink_list = SinkDropListWidget(sink, self.move_sink_input)
             sink_list.setItemDelegate(RoundedBoxDelegate(padding=12))
