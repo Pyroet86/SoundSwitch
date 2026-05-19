@@ -1928,7 +1928,7 @@ class MainWindow(QMainWindow):
         OSDSettingsDialog(self.state, on_apply, parent=self).exec_()
 
     def open_rules_dialog(self):
-        pass
+        RulesDialog(self.state, self.save_state, self.refresh_rules_list, parent=self).exec_()
 
     def open_settings(self):
         SettingsDialog(parent=self).exec_()
