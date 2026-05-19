@@ -1528,23 +1528,48 @@ class MainWindow(QMainWindow):
                 placeholder.setFlags(Qt.NoItemFlags)
                 placeholder.setForeground(QBrush(QColor('#555')))
                 sink_list.addItem(placeholder)
-        # Outputs panel: show all sinks (hardware and custom), highlight default, skip hidden sinks
-        for i, sink in enumerate([s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]):
+        # Outputs panel: per-item widget with inline set-default button for non-default sinks
+        default_sink = self.get_default_sink_name()
+        visible_sinks = [s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]
+        for i, sink in enumerate(visible_sinks):
             name = sink['name']
-            label = f"{name}"
-            if name == self.get_default_sink_name():
-                label += " (default)"
-            item = QListWidgetItem(label)
-            if name == self.get_default_sink_name():
-                item.setFont(QFont('', 10, QFont.Bold))
-                item.setForeground(QBrush(QColor('#00bfff')))
+            is_default = (name == default_sink)
+            bg = '#232629' if i % 2 == 0 else '#2d2f31'
+
+            item = QListWidgetItem()
+            item.setSizeHint(QtCore.QSize(0, 40))
             item.setToolTip(f"Sink: {name}")
-            # Dark alternating row colors
-            if i % 2 == 0:
-                item.setBackground(QBrush(QColor('#232629')))
-            else:
-                item.setBackground(QBrush(QColor('#2d2f31')))
+
+            widget = QWidget()
+            widget.setStyleSheet(f'background: {bg};')
+
+            row = QHBoxLayout(widget)
+            row.setContentsMargins(8, 0, 8, 0)
+            row.setSpacing(8)
+
+            lbl = QLabel(name)
+            lbl.setStyleSheet(
+                'color: #00bfff; font-weight: bold; background: transparent;'
+                if is_default else
+                'color: #f0f0f0; background: transparent;'
+            )
+            row.addWidget(lbl)
+            row.addStretch()
+
+            if not is_default:
+                btn = QPushButton('Set as default')
+                btn.setStyleSheet(
+                    'QPushButton { background: #1e2a3a; color: #f0f0f0;'
+                    ' border: 1px solid #00bfff; border-radius: 4px;'
+                    ' padding: 2px 8px; font-size: 9pt; }'
+                    'QPushButton:hover { background: #003366; }'
+                    'QPushButton:pressed { background: #00bfff; color: #000; }'
+                )
+                btn.clicked.connect(lambda checked, n=name: self.set_default_sink(n))
+                row.addWidget(btn)
+
             self.outputs_list.addItem(item)
+            self.outputs_list.setItemWidget(item, widget)
         # Input Devices panel
         self.inputs_list.clear()
         input_sources = self.get_input_sources()
