@@ -2,6 +2,7 @@ import os
 import sys
 
 _DESKTOP_PATH = os.path.expanduser('~/.config/autostart/soundswitch.desktop')
+_APP_ENTRY_PATH = os.path.expanduser('~/.local/share/applications/soundswitch.desktop')
 _SOUNDSWITCH_PY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'SoundSwitch.py')
 
 _DESKTOP_TEMPLATE = """\
@@ -44,3 +45,40 @@ def enable(start_minimized: bool = True) -> None:
 def disable() -> None:
     if os.path.isfile(_DESKTOP_PATH):
         os.remove(_DESKTOP_PATH)
+
+
+_APP_ICON_PATH = os.path.expanduser('~/.local/share/icons/soundswitch.png')
+
+_APP_ENTRY_TEMPLATE = """\
+[Desktop Entry]
+Type=Application
+Name=SoundSwitch
+Exec={python} {script}
+Icon={icon}
+Hidden=false
+NoDisplay=false
+Terminal=false
+Categories=AudioVideo;Audio;
+"""
+
+
+def app_entry_is_enabled() -> bool:
+    return os.path.isfile(_APP_ENTRY_PATH)
+
+
+def app_entry_enable(icon_path: str = '') -> None:
+    os.makedirs(os.path.dirname(_APP_ENTRY_PATH), exist_ok=True)
+    content = _APP_ENTRY_TEMPLATE.format(
+        python=sys.executable,
+        script=_SOUNDSWITCH_PY,
+        icon=icon_path,
+    )
+    with open(_APP_ENTRY_PATH, 'w') as f:
+        f.write(content)
+
+
+def app_entry_disable() -> None:
+    if os.path.isfile(_APP_ENTRY_PATH):
+        os.remove(_APP_ENTRY_PATH)
+    if os.path.isfile(_APP_ICON_PATH):
+        os.remove(_APP_ICON_PATH)
