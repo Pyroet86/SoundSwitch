@@ -9,7 +9,7 @@ import autostart
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
-    QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
+    QStyledItemDelegate, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
     QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider,
 )
@@ -1400,18 +1400,6 @@ class MainWindow(QMainWindow):
                         loopback_indices.add(str(idx))
         self.hidden_streams = loopback_indices
 
-    def add_rule_from_ui(self):
-        app_name = self.rule_app_input.text().strip()
-        sink = self.rule_sink_combo.currentText()
-        if not app_name:
-            self.show_status('App name required for rule.', error=True)
-            return
-        self.state['rules'].append({'app_name': app_name, 'sink': sink})
-        self.save_state()
-        self.refresh_rules_list()
-        self.rule_app_input.clear()
-        self.apply_routing_rules()
-
     def apply_routing_rules(self):
         sinks = self.get_sinks()
         sink_inputs = self.get_sink_inputs()
@@ -1433,13 +1421,6 @@ class MainWindow(QMainWindow):
         
         # Update status bar after applying rules
         self.update_status_bar()
-
-    def remove_selected_rule(self):
-        row = self.rules_list.currentRow()
-        if row >= 0 and row < len(self.state['rules']):
-            del self.state['rules'][row]
-            self.save_state()
-            self.refresh_rules_list()
 
     def refresh_rules_list(self):
         self.rules_list.clear()
