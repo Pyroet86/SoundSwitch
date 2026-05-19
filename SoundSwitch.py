@@ -1012,30 +1012,20 @@ class MainWindow(QMainWindow):
 
         rules_widget = QWidget()
         rules_layout = QVBoxLayout(rules_widget)
-        rules_layout.setContentsMargins(0, 0, 0, 0)
+        rules_layout.setContentsMargins(0, 8, 0, 0)
         rules_label = QLabel('Auto-Routing Rules')
-        rules_label.setFont(QFont('', 11, QFont.Bold))
-        rules_label.setStyleSheet('margin-bottom: 4px;')
+        rules_label.setFont(QFont('', 12, QFont.Bold))
+        rules_label.setStyleSheet('margin-bottom: 8px;')
         self.rules_list = QListWidget()
-        self.rules_list.setAlternatingRowColors(True)
+        self.rules_list.setAlternatingRowColors(False)
         self.rules_list.setSelectionMode(QListWidget.SingleSelection)
         self.rules_list.setStyleSheet('QListWidget { padding: 4px; }')
-        rule_controls = QHBoxLayout()
-        self.rule_app_input = QLineEdit()
-        self.rule_app_input.setPlaceholderText('App name (e.g. Firefox)')
-        self.rule_sink_combo = QComboBox()
-        self.rule_sink_combo.addItems(CUSTOM_SINKS)
-        self.add_rule_btn = QPushButton('Add Rule')
-        self.add_rule_btn.clicked.connect(self.add_rule_from_ui)
-        self.remove_rule_btn = QPushButton('Remove Selected')
-        self.remove_rule_btn.clicked.connect(self.remove_selected_rule)
-        rule_controls.addWidget(self.rule_app_input)
-        rule_controls.addWidget(self.rule_sink_combo)
-        rule_controls.addWidget(self.add_rule_btn)
-        rule_controls.addWidget(self.remove_rule_btn)
+        self.rules_list.setItemDelegate(RuleItemDelegate())
+        manage_rules_btn = QPushButton('Manage Rules…')
+        manage_rules_btn.clicked.connect(self.open_rules_dialog)
         rules_layout.addWidget(rules_label)
         rules_layout.addWidget(self.rules_list)
-        rules_layout.addLayout(rule_controls)
+        rules_layout.addWidget(manage_rules_btn)
 
         self._splitter_left.addWidget(streams_widget)
         self._splitter_left.addWidget(rules_widget)
@@ -1454,7 +1444,9 @@ class MainWindow(QMainWindow):
     def refresh_rules_list(self):
         self.rules_list.clear()
         for rule in self.state['rules']:
-            item = QListWidgetItem(f"If app is '{rule['app_name']}' → {rule['sink']}")
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
+            item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
             self.rules_list.addItem(item)
 
     def show_stream_context_menu(self, pos):
@@ -1831,6 +1823,9 @@ class MainWindow(QMainWindow):
         def on_apply():
             self.save_state()
         OSDSettingsDialog(self.state, on_apply, parent=self).exec_()
+
+    def open_rules_dialog(self):
+        pass
 
     def open_settings(self):
         SettingsDialog(parent=self).exec_()
