@@ -9,12 +9,12 @@ import autostart
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
-    QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit,
+    QStyledItemDelegate, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
     QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
 from PyQt5 import QtCore, QtGui
 
 try:
@@ -173,6 +173,57 @@ class RoundedBoxDelegate(QStyledItemDelegate):
         data = index.data(Qt.UserRole + 1)
         if data and isinstance(data, dict) and data.get('sub'):
             return base.expandedTo(QtCore.QSize(base.width(), 48))
+        return base.expandedTo(QtCore.QSize(base.width(), 36))
+
+
+class RuleItemDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        painter.save()
+        rect = option.rect.adjusted(4, 4, -4, -4)
+        radius = 10
+        if option.state & QStyle.State_Selected:
+            bg = QColor('#005f87')
+            border = QColor('#fff')
+        elif option.state & QStyle.State_MouseOver:
+            bg = QColor('#2d4157')
+            border = QColor('#444')
+        else:
+            bg = QColor('#232629') if index.row() % 2 == 0 else QColor('#2d2f31')
+            border = QColor('#444')
+        painter.setRenderHint(painter.Antialiasing)
+        painter.setBrush(bg)
+        painter.setPen(border)
+        painter.drawRoundedRect(rect, radius, radius)
+        data = index.data(Qt.UserRole)
+        if not data or not isinstance(data, dict):
+            painter.restore()
+            return
+        app_name = data.get('app_name', '')
+        sink = data.get('sink', '')
+        base_font = QFont(option.font)
+        base_font.setPointSize(10)
+        fm_normal = QFontMetrics(base_font)
+        bold_font = QFont(base_font)
+        bold_font.setBold(True)
+        fm_bold = QFontMetrics(bold_font)
+        x = rect.x() + 10
+        y = rect.y() + (rect.height() + max(fm_normal.ascent(), fm_bold.ascent()) - fm_normal.descent()) // 2
+        segments = [
+            ('If audio stream is ', base_font, fm_normal, QColor('#f0f0f0')),
+            (app_name,             bold_font,  fm_bold,   QColor('#00bfff')),
+            (' route to ',         base_font,  fm_normal, QColor('#f0f0f0')),
+            (sink,                 bold_font,  fm_bold,   QColor('#00bfff')),
+        ]
+        painter.setClipRect(rect)
+        for text, font, fm, color in segments:
+            painter.setFont(font)
+            painter.setPen(color)
+            painter.drawText(x, y, text)
+            x += fm.horizontalAdvance(text)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        base = super().sizeHint(option, index)
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
 
@@ -490,6 +541,137 @@ class NoiseCancelDialog(QDialog):
             'vad_threshold': self._threshold_spin.value(),
             'channel_mode': self._mode_combo.currentText().lower(),
         }
+
+
+class RulesDialog(QDialog):
+    def __init__(self, state, save_state_cb, refresh_rules_cb, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self._save_state_cb = save_state_cb
+        self._refresh_rules_cb = refresh_rules_cb
+        self.setWindowTitle('Manage Auto-Routing Rules')
+        self.setModal(True)
+        self.setMinimumWidth(500)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        main_row = QHBoxLayout()
+        main_row.setSpacing(12)
+
+        left = QVBoxLayout()
+        left.addWidget(QLabel('Rules'))
+        self._list = QListWidget()
+        self._list.setItemDelegate(RuleItemDelegate())
+        self._list.setAlternatingRowColors(False)
+        self._list.currentRowChanged.connect(self._on_row_changed)
+        left.addWidget(self._list)
+        main_row.addLayout(left, 3)
+
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        new_btn = QPushButton('New Rule')
+        new_btn.clicked.connect(self._new_rule)
+        right.addWidget(new_btn)
+
+        right.addWidget(QLabel('App name:'))
+        self._app_input = QLineEdit()
+        self._app_input.setPlaceholderText('App name e.g. Firefox')
+        self._app_input.returnPressed.connect(self._save_rule)
+        right.addWidget(self._app_input)
+
+        right.addWidget(QLabel('Route to:'))
+        self._sink_combo = QComboBox()
+        self._sink_combo.addItems(CUSTOM_SINKS)
+        right.addWidget(self._sink_combo)
+
+        btn_row = QHBoxLayout()
+        self._save_btn = QPushButton('Save')
+        self._save_btn.clicked.connect(self._save_rule)
+        self._delete_btn = QPushButton('Delete')
+        self._delete_btn.clicked.connect(self._delete_rule)
+        self._delete_btn.setEnabled(False)
+        btn_row.addWidget(self._save_btn)
+        btn_row.addWidget(self._delete_btn)
+        right.addLayout(btn_row)
+        right.addStretch()
+        main_row.addLayout(right, 2)
+
+        layout.addLayout(main_row)
+
+        bottom_row = QHBoxLayout()
+        bottom_row.addStretch()
+        close_btn = QPushButton('Close')
+        close_btn.clicked.connect(self.accept)
+        bottom_row.addWidget(close_btn)
+        layout.addLayout(bottom_row)
+
+        self._refresh_list()
+
+    def _refresh_list(self):
+        self._list.blockSignals(True)
+        self._list.clear()
+        for rule in self.state.get('rules', []):
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
+            item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
+            self._list.addItem(item)
+        self._list.blockSignals(False)
+
+    def _on_row_changed(self, row):
+        if row < 0:
+            self._delete_btn.setEnabled(False)
+            return
+        rule = self.state.get('rules', [])[row]
+        self._app_input.setText(rule['app_name'])
+        idx = CUSTOM_SINKS.index(rule['sink']) if rule['sink'] in CUSTOM_SINKS else 0
+        self._sink_combo.setCurrentIndex(idx)
+        self._delete_btn.setEnabled(True)
+
+    def _new_rule(self):
+        self._list.setCurrentRow(-1)
+        self._app_input.clear()
+        self._sink_combo.setCurrentIndex(0)
+        self._delete_btn.setEnabled(False)
+
+    def _save_rule(self):
+        app_name = self._app_input.text().strip()
+        if not app_name:
+            QMessageBox.warning(self, 'Missing App Name', 'Please enter an app name.')
+            return
+        sink = self._sink_combo.currentText()
+        row = self._list.currentRow()
+        if row >= 0:
+            duplicate = [
+                i for i, r in enumerate(self.state.get('rules', []))
+                if r['app_name'].lower() == app_name.lower() and i != row
+            ]
+            if duplicate:
+                QMessageBox.warning(self, 'Duplicate Rule', f"A rule for '{app_name}' already exists.")
+                return
+            self.state['rules'][row] = {'app_name': app_name, 'sink': sink}
+        else:
+            existing = [r for r in self.state.get('rules', []) if r['app_name'].lower() == app_name.lower()]
+            if existing:
+                QMessageBox.warning(self, 'Duplicate Rule', f"A rule for '{app_name}' already exists.")
+                return
+            self.state['rules'].append({'app_name': app_name, 'sink': sink})
+        self._save_state_cb()
+        self._refresh_rules_cb()
+        self._refresh_list()
+        self._new_rule()
+
+    def _delete_rule(self):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        del self.state['rules'][row]
+        self._save_state_cb()
+        self._refresh_rules_cb()
+        self._refresh_list()
+        self._new_rule()
 
 
 _QT_MOD_TO_XDG = {
@@ -961,30 +1143,20 @@ class MainWindow(QMainWindow):
 
         rules_widget = QWidget()
         rules_layout = QVBoxLayout(rules_widget)
-        rules_layout.setContentsMargins(0, 0, 0, 0)
+        rules_layout.setContentsMargins(0, 8, 0, 0)
         rules_label = QLabel('Auto-Routing Rules')
-        rules_label.setFont(QFont('', 11, QFont.Bold))
-        rules_label.setStyleSheet('margin-bottom: 4px;')
+        rules_label.setFont(QFont('', 12, QFont.Bold))
+        rules_label.setStyleSheet('margin-bottom: 8px;')
         self.rules_list = QListWidget()
-        self.rules_list.setAlternatingRowColors(True)
+        self.rules_list.setAlternatingRowColors(False)
         self.rules_list.setSelectionMode(QListWidget.SingleSelection)
         self.rules_list.setStyleSheet('QListWidget { padding: 4px; }')
-        rule_controls = QHBoxLayout()
-        self.rule_app_input = QLineEdit()
-        self.rule_app_input.setPlaceholderText('App name (e.g. Firefox)')
-        self.rule_sink_combo = QComboBox()
-        self.rule_sink_combo.addItems(CUSTOM_SINKS)
-        self.add_rule_btn = QPushButton('Add Rule')
-        self.add_rule_btn.clicked.connect(self.add_rule_from_ui)
-        self.remove_rule_btn = QPushButton('Remove Selected')
-        self.remove_rule_btn.clicked.connect(self.remove_selected_rule)
-        rule_controls.addWidget(self.rule_app_input)
-        rule_controls.addWidget(self.rule_sink_combo)
-        rule_controls.addWidget(self.add_rule_btn)
-        rule_controls.addWidget(self.remove_rule_btn)
+        self.rules_list.setItemDelegate(RuleItemDelegate())
+        manage_rules_btn = QPushButton('Manage Rules…')
+        manage_rules_btn.clicked.connect(self.open_rules_dialog)
         rules_layout.addWidget(rules_label)
         rules_layout.addWidget(self.rules_list)
-        rules_layout.addLayout(rule_controls)
+        rules_layout.addWidget(manage_rules_btn)
 
         self._splitter_left.addWidget(streams_widget)
         self._splitter_left.addWidget(rules_widget)
@@ -1359,18 +1531,6 @@ class MainWindow(QMainWindow):
                         loopback_indices.add(str(idx))
         self.hidden_streams = loopback_indices
 
-    def add_rule_from_ui(self):
-        app_name = self.rule_app_input.text().strip()
-        sink = self.rule_sink_combo.currentText()
-        if not app_name:
-            self.show_status('App name required for rule.', error=True)
-            return
-        self.state['rules'].append({'app_name': app_name, 'sink': sink})
-        self.save_state()
-        self.refresh_rules_list()
-        self.rule_app_input.clear()
-        self.apply_routing_rules()
-
     def apply_routing_rules(self):
         sinks = self.get_sinks()
         sink_inputs = self.get_sink_inputs()
@@ -1393,17 +1553,12 @@ class MainWindow(QMainWindow):
         # Update status bar after applying rules
         self.update_status_bar()
 
-    def remove_selected_rule(self):
-        row = self.rules_list.currentRow()
-        if row >= 0 and row < len(self.state['rules']):
-            del self.state['rules'][row]
-            self.save_state()
-            self.refresh_rules_list()
-
     def refresh_rules_list(self):
         self.rules_list.clear()
         for rule in self.state['rules']:
-            item = QListWidgetItem(f"If app is '{rule['app_name']}' → {rule['sink']}")
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
+            item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
             self.rules_list.addItem(item)
 
     def show_stream_context_menu(self, pos):
@@ -1780,6 +1935,14 @@ class MainWindow(QMainWindow):
         def on_apply():
             self.save_state()
         OSDSettingsDialog(self.state, on_apply, parent=self).exec_()
+
+    def open_rules_dialog(self):
+        RulesDialog(
+            self.state,
+            self.save_state,
+            lambda: self.refresh_devices_and_sinks(force=True),
+            parent=self,
+        ).exec_()
 
     def open_settings(self):
         SettingsDialog(parent=self).exec_()
