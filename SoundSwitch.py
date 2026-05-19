@@ -207,13 +207,14 @@ class RuleItemDelegate(QStyledItemDelegate):
         bold_font.setBold(True)
         fm_bold = QFontMetrics(bold_font)
         x = rect.x() + 10
-        y = rect.y() + (rect.height() + fm_normal.ascent() - fm_normal.descent()) // 2
+        y = rect.y() + (rect.height() + max(fm_normal.ascent(), fm_bold.ascent()) - fm_normal.descent()) // 2
         segments = [
             ('If audio stream is ', base_font, fm_normal, QColor('#f0f0f0')),
             (app_name,             bold_font,  fm_bold,   QColor('#00bfff')),
             (' route to ',         base_font,  fm_normal, QColor('#f0f0f0')),
             (sink,                 bold_font,  fm_bold,   QColor('#00bfff')),
         ]
+        painter.setClipRect(rect)
         for text, font, fm, color in segments:
             painter.setFont(font)
             painter.setPen(color)
