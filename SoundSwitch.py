@@ -1032,10 +1032,10 @@ class MainWindow(QMainWindow):
         outputs_label.setFont(QFont('', 12, QFont.Bold))
         outputs_label.setStyleSheet('margin-bottom: 8px;')
         self.outputs_list = QListWidget()
-        self.outputs_list.setAlternatingRowColors(True)
+        self.outputs_list.setAlternatingRowColors(False)
         self.outputs_list.setSelectionMode(QListWidget.SingleSelection)
         self.outputs_list.setContentsMargins(0, 0, 0, 0)
-        self.outputs_list.setStyleSheet('QListWidget { padding: 8px; }')
+        self.outputs_list.setStyleSheet('QListWidget { padding: 0; }')
         outputs_panel.addWidget(outputs_label)
         outputs_panel.addWidget(self.outputs_list)
 
