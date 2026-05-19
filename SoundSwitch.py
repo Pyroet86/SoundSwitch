@@ -1150,7 +1150,7 @@ class MainWindow(QMainWindow):
             elif line.startswith('application.name = '):
                 current['app_name'] = line.split('=', 1)[1].strip().strip('"')
             elif line.startswith('media.name = '):
-                current['media_name'] = line.split('=', 1)[1].strip('"')
+                current['media_name'] = line.split('=', 1)[1].strip().strip('"')
             elif line.startswith('Sink:'):
                 current['sink'] = line.split(':', 1)[1].strip()
         if current:
