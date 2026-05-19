@@ -1036,13 +1036,8 @@ class MainWindow(QMainWindow):
         self.outputs_list.setSelectionMode(QListWidget.SingleSelection)
         self.outputs_list.setContentsMargins(0, 0, 0, 0)
         self.outputs_list.setStyleSheet('QListWidget { padding: 8px; }')
-        self.outputs_delegate = RoundedBoxDelegate(highlight_selected=True, default_sink_name=self.get_default_sink_name())
-        self.outputs_list.setItemDelegate(self.outputs_delegate)
         outputs_panel.addWidget(outputs_label)
         outputs_panel.addWidget(self.outputs_list)
-        self.set_default_btn = QPushButton('Set as Default Output')
-        self.set_default_btn.clicked.connect(self.set_default_sink)
-        outputs_panel.addWidget(self.set_default_btn)
 
         # Input Devices widget
         inputs_widget = QWidget()
@@ -1534,8 +1529,6 @@ class MainWindow(QMainWindow):
                 placeholder.setForeground(QBrush(QColor('#555')))
                 sink_list.addItem(placeholder)
         # Outputs panel: show all sinks (hardware and custom), highlight default, skip hidden sinks
-        if hasattr(self, 'outputs_delegate'):
-            self.outputs_delegate.default_sink_name = self.get_default_sink_name()
         for i, sink in enumerate([s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]):
             name = sink['name']
             label = f"{name}"
