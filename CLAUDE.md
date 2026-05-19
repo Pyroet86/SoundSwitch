@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow Requirements
+
+Before making any code change — bug fix, feature, refactor, or any modification to project files — you MUST invoke the `feature-branch-workflow` skill. No exceptions, even when brainstorming runs first.
+
 ## What This Project Is
 
 SoundSwitch is a PyQt5 GUI application for Linux that routes PipeWire audio streams to virtual sinks. It creates four named virtual sinks (Game, Media, Chat, Aux) and lets users route application streams to them via drag-and-drop, with optional auto-routing rules and loopback to hardware outputs.
