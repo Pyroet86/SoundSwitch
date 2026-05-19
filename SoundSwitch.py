@@ -543,6 +543,122 @@ class NoiseCancelDialog(QDialog):
         }
 
 
+class RulesDialog(QDialog):
+    def __init__(self, state, save_state_cb, refresh_rules_cb, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self._save_state_cb = save_state_cb
+        self._refresh_rules_cb = refresh_rules_cb
+        self.setWindowTitle('Manage Auto-Routing Rules')
+        self.setModal(True)
+        self.setMinimumWidth(500)
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        main_row = QHBoxLayout()
+        main_row.setSpacing(12)
+
+        left = QVBoxLayout()
+        left.addWidget(QLabel('Rules'))
+        self._list = QListWidget()
+        self._list.setItemDelegate(RuleItemDelegate())
+        self._list.setAlternatingRowColors(False)
+        self._list.currentRowChanged.connect(self._on_row_changed)
+        left.addWidget(self._list)
+        main_row.addLayout(left, 3)
+
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        new_btn = QPushButton('New Rule')
+        new_btn.clicked.connect(self._new_rule)
+        right.addWidget(new_btn)
+
+        right.addWidget(QLabel('App name:'))
+        self._app_input = QLineEdit()
+        self._app_input.setPlaceholderText('App name e.g. Firefox')
+        right.addWidget(self._app_input)
+
+        right.addWidget(QLabel('Route to:'))
+        self._sink_combo = QComboBox()
+        self._sink_combo.addItems(CUSTOM_SINKS)
+        right.addWidget(self._sink_combo)
+
+        btn_row = QHBoxLayout()
+        self._save_btn = QPushButton('Save')
+        self._save_btn.clicked.connect(self._save_rule)
+        self._delete_btn = QPushButton('Delete')
+        self._delete_btn.clicked.connect(self._delete_rule)
+        self._delete_btn.setEnabled(False)
+        btn_row.addWidget(self._save_btn)
+        btn_row.addWidget(self._delete_btn)
+        right.addLayout(btn_row)
+        right.addStretch()
+        main_row.addLayout(right, 2)
+
+        layout.addLayout(main_row)
+
+        bottom_row = QHBoxLayout()
+        bottom_row.addStretch()
+        close_btn = QPushButton('Close')
+        close_btn.clicked.connect(self.accept)
+        bottom_row.addWidget(close_btn)
+        layout.addLayout(bottom_row)
+
+        self._refresh_list()
+
+    def _refresh_list(self):
+        self._list.clear()
+        for rule in self.state.get('rules', []):
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
+            item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
+            self._list.addItem(item)
+
+    def _on_row_changed(self, row):
+        if row < 0:
+            self._delete_btn.setEnabled(False)
+            return
+        rule = self.state['rules'][row]
+        self._app_input.setText(rule['app_name'])
+        idx = CUSTOM_SINKS.index(rule['sink']) if rule['sink'] in CUSTOM_SINKS else 0
+        self._sink_combo.setCurrentIndex(idx)
+        self._delete_btn.setEnabled(True)
+
+    def _new_rule(self):
+        self._list.setCurrentRow(-1)
+        self._app_input.clear()
+        self._sink_combo.setCurrentIndex(0)
+        self._delete_btn.setEnabled(False)
+
+    def _save_rule(self):
+        app_name = self._app_input.text().strip()
+        if not app_name:
+            return
+        sink = self._sink_combo.currentText()
+        row = self._list.currentRow()
+        if row >= 0:
+            self.state['rules'][row] = {'app_name': app_name, 'sink': sink}
+        else:
+            self.state['rules'].append({'app_name': app_name, 'sink': sink})
+        self._save_state_cb()
+        self._refresh_rules_cb()
+        self._refresh_list()
+        self._new_rule()
+
+    def _delete_rule(self):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        del self.state['rules'][row]
+        self._save_state_cb()
+        self._refresh_rules_cb()
+        self._refresh_list()
+        self._new_rule()
+
+
 _QT_MOD_TO_XDG = {
     'ctrl':  '<Control>',
     'alt':   '<Alt>',
