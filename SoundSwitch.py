@@ -390,6 +390,11 @@ class SettingsDialog(QDialog):
         self._autostart_cb.stateChanged.connect(self._on_autostart_changed)
         self._minimized_cb.stateChanged.connect(self._on_minimized_changed)
 
+        self._app_entry_cb = QCheckBox('Show in application launcher')
+        self._app_entry_cb.setChecked(autostart.app_entry_is_enabled())
+        self._app_entry_cb.stateChanged.connect(self._on_app_entry_changed)
+        layout.addWidget(self._app_entry_cb)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         close_btn = QPushButton('Close')
@@ -408,6 +413,15 @@ class SettingsDialog(QDialog):
     def _on_minimized_changed(self, _state):
         if self._autostart_cb.isChecked():
             autostart.enable(start_minimized=self._minimized_cb.isChecked())
+
+    def _on_app_entry_changed(self, _state):
+        if self._app_entry_cb.isChecked():
+            icon_path = autostart._APP_ICON_PATH
+            os.makedirs(os.path.dirname(icon_path), exist_ok=True)
+            create_app_icon().pixmap(256, 256).save(icon_path, 'PNG')
+            autostart.app_entry_enable(icon_path=icon_path)
+        else:
+            autostart.app_entry_disable()
 
 
 class NoiseCancelDialog(QDialog):
@@ -1183,17 +1197,11 @@ class MainWindow(QMainWindow):
             if to_remove:
                 self.save_state()
 
-    def set_default_sink(self):
-        selected = self.outputs_list.currentItem()
-        if not selected:
-            QMessageBox.warning(self, 'No Selection', 'Please select a sink to set as default.')
-            return
-        sink_name = selected.text().replace(' (default)', '').strip()
+    def set_default_sink(self, sink_name: str):
         self.run_pactl(['set-default-sink', sink_name])
         self.state['default_sink'] = sink_name
         self.setup_custom_sink_loopbacks(sink_name)
         self.refresh_devices_and_sinks(force=True)
-        QMessageBox.information(self, 'Default Sink', f'Set {sink_name} as the default output device and routed custom sinks to it.')
 
     def enable_noise_cancellation(self, mic_name, mic_description, vad_threshold, channel_mode):
         safe_id = _safe_mic_id(mic_name)
