@@ -1518,8 +1518,10 @@ class MainWindow(QMainWindow):
             sink_list.clear()
             streams = [s for s in sink_map.get(sink, []) if s['index'] not in self.hidden_streams]
             for j, stream in enumerate(streams):
-                main_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']})"
-                sub_label = stream.get('media_name', '')
+                media_name = stream.get('media_name', '')
+                app_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']})"
+                main_label = media_name if media_name else app_label
+                sub_label = app_label if media_name else ''
                 stream_item = QListWidgetItem()
                 stream_item.setData(Qt.DisplayRole, main_label)
                 stream_item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
