@@ -1117,14 +1117,23 @@ class MainWindow(QMainWindow):
 
     def get_sinks(self):
         # Returns a list of dicts with 'index', 'name', 'description'
-        output = self.run_pactl(['list', 'short', 'sinks'])
+        output = self.run_pactl(['list', 'sinks'])
         sinks = []
-        for line in output.strip().split('\n'):
-            if not line:
-                continue
-            parts = line.split('\t')
-            if len(parts) >= 2:
-                sinks.append({'index': parts[0], 'name': parts[1], 'description': parts[1]})
+        current = {}
+        for line in output.splitlines():
+            line = line.strip()
+            if line.startswith('Sink #'):
+                if current.get('name'):
+                    current.setdefault('description', current['name'])
+                    sinks.append(current)
+                current = {'index': line.split('#')[1]}
+            elif line.startswith('Name:'):
+                current['name'] = line.split(':', 1)[1].strip()
+            elif line.startswith('Description:'):
+                current['description'] = line.split(':', 1)[1].strip()
+        if current.get('name'):
+            current.setdefault('description', current['name'])
+            sinks.append(current)
         return sinks
 
     def get_sink_inputs(self):
@@ -1547,7 +1556,7 @@ class MainWindow(QMainWindow):
             row.setContentsMargins(8, 0, 8, 0)
             row.setSpacing(8)
 
-            lbl = QLabel(name)
+            lbl = QLabel(sink['description'])
             lbl.setStyleSheet(
                 'color: #00bfff; font-weight: bold; background: transparent;'
                 if is_default else
