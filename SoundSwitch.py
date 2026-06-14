@@ -556,12 +556,16 @@ class RulesDialog(QDialog):
         self.state = state
         self._save_state_cb = save_state_cb
         self._refresh_rules_cb = refresh_rules_cb
+        self._prefill_active = False
         self.setWindowTitle('Manage Auto-Routing Rules')
         self.setModal(True)
         self.setMinimumWidth(500)
         self._init_ui()
         if prefill_app_name:
-            QTimer.singleShot(0, lambda: self._apply_prefill(prefill_app_name))
+            self._prefill_active = True
+            self._app_input.setText(prefill_app_name)
+            self._sink_combo.setCurrentIndex(0)
+            self._delete_btn.setEnabled(False)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -630,6 +634,12 @@ class RulesDialog(QDialog):
         self._list.blockSignals(False)
 
     def _on_row_changed(self, row):
+        if self._prefill_active and row >= 0:
+            self._prefill_active = False
+            self._list.blockSignals(True)
+            self._list.setCurrentRow(-1)
+            self._list.blockSignals(False)
+            return
         if row < 0:
             self._delete_btn.setEnabled(False)
             return
@@ -640,16 +650,9 @@ class RulesDialog(QDialog):
         self._delete_btn.setEnabled(True)
 
     def _new_rule(self):
+        self._prefill_active = False
         self._list.setCurrentRow(-1)
         self._app_input.clear()
-        self._sink_combo.setCurrentIndex(0)
-        self._delete_btn.setEnabled(False)
-
-    def _apply_prefill(self, app_name):
-        self._list.blockSignals(True)
-        self._list.setCurrentRow(-1)
-        self._list.blockSignals(False)
-        self._app_input.setText(app_name)
         self._sink_combo.setCurrentIndex(0)
         self._delete_btn.setEnabled(False)
 
