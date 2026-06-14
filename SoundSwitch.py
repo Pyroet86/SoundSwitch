@@ -1577,11 +1577,14 @@ class MainWindow(QMainWindow):
         if not item:
             return
         stream_index = item.data(Qt.ItemDataRole.UserRole)
+        app_name = item.data(Qt.UserRole + 2)
+        menu = QMenu(self)
+        create_action = menu.addAction('Create Rule')
+        create_action.triggered.connect(lambda: self.open_rules_dialog_for_app(app_name))
         if stream_index in self.state.get('manual_overrides', {}):
-            menu = QMenu(self)
-            action = menu.addAction('Reset to Default Behaviour')
-            action.triggered.connect(lambda: self.reset_manual_override(stream_index))
-            menu.exec_(self.devices_list.viewport().mapToGlobal(pos))
+            reset_action = menu.addAction('Reset to Default Behaviour')
+            reset_action.triggered.connect(lambda: self.reset_manual_override(stream_index))
+        menu.exec_(self.devices_list.viewport().mapToGlobal(pos))
 
     def show_input_context_menu(self, pos):
         item = self.inputs_list.itemAt(pos)
@@ -1954,6 +1957,15 @@ class MainWindow(QMainWindow):
             self.save_state,
             lambda: self.refresh_devices_and_sinks(force=True),
             parent=self,
+        ).exec_()
+
+    def open_rules_dialog_for_app(self, app_name):
+        RulesDialog(
+            self.state,
+            self.save_state,
+            lambda: self.refresh_devices_and_sinks(force=True),
+            parent=self,
+            prefill_app_name=app_name,
         ).exec_()
 
     def open_settings(self):
