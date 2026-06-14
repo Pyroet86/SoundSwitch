@@ -1667,6 +1667,7 @@ class MainWindow(QMainWindow):
             item.setData(Qt.DisplayRole, main_label)
             item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
             item.setData(Qt.ItemDataRole.UserRole, stream['index'])
+            item.setData(Qt.UserRole + 2, stream.get('app_name', ''))
             item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}\nSink: {stream.get('sink_name', 'Unknown')}\nMedia: {stream.get('media_name', '')}")
             # Dark alternating row colors
             if i % 2 == 0:
