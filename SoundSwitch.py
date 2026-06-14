@@ -551,7 +551,7 @@ class NoiseCancelDialog(QDialog):
 
 
 class RulesDialog(QDialog):
-    def __init__(self, state, save_state_cb, refresh_rules_cb, parent=None):
+    def __init__(self, state, save_state_cb, refresh_rules_cb, prefill_app_name=None, parent=None):
         super().__init__(parent)
         self.state = state
         self._save_state_cb = save_state_cb
@@ -560,6 +560,10 @@ class RulesDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(500)
         self._init_ui()
+        if prefill_app_name:
+            self._new_rule()
+            self._app_input.setText(prefill_app_name)
+            self._sink_combo.setCurrentIndex(0)  # CUSTOM_SINKS[0] == 'Game'
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
