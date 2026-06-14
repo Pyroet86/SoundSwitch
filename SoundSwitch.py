@@ -551,7 +551,7 @@ class NoiseCancelDialog(QDialog):
 
 
 class RulesDialog(QDialog):
-    def __init__(self, state, save_state_cb, refresh_rules_cb, prefill_app_name=None, parent=None):
+    def __init__(self, state, save_state_cb, refresh_rules_cb, parent=None, prefill_app_name=None):
         super().__init__(parent)
         self.state = state
         self._save_state_cb = save_state_cb
