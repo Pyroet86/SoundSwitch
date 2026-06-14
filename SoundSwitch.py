@@ -561,9 +561,7 @@ class RulesDialog(QDialog):
         self.setMinimumWidth(500)
         self._init_ui()
         if prefill_app_name:
-            self._new_rule()
-            self._app_input.setText(prefill_app_name)
-            self._sink_combo.setCurrentIndex(0)  # CUSTOM_SINKS[0] == 'Game'
+            QTimer.singleShot(0, lambda: self._apply_prefill(prefill_app_name))
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -644,6 +642,14 @@ class RulesDialog(QDialog):
     def _new_rule(self):
         self._list.setCurrentRow(-1)
         self._app_input.clear()
+        self._sink_combo.setCurrentIndex(0)
+        self._delete_btn.setEnabled(False)
+
+    def _apply_prefill(self, app_name):
+        self._list.blockSignals(True)
+        self._list.setCurrentRow(-1)
+        self._list.blockSignals(False)
+        self._app_input.setText(app_name)
         self._sink_combo.setCurrentIndex(0)
         self._delete_btn.setEnabled(False)
 
