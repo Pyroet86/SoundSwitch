@@ -1,6 +1,7 @@
 import re
 import sys
 import os
+import subprocess
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -60,13 +61,10 @@ class TestParseDbusMeta(unittest.TestCase):
     def test_empty_output_returns_empty_dict(self):
         self.assertEqual(_parse_dbus_metadata(''), {})
 
-    def test_missing_url_returns_empty_dict(self):
+    def test_extracts_other_keys_when_url_absent(self):
         result = _parse_dbus_metadata("no url here\nstring \"xesam:title\"\nvariant string \"hi\"")
         self.assertEqual(result.get('xesam:title'), 'hi')
         self.assertNotIn('xesam:url', result)
-
-
-import subprocess
 
 
 class TestGetMprisBrowserUrl(unittest.TestCase):
@@ -84,7 +82,7 @@ class TestGetMprisBrowserUrl(unittest.TestCase):
         fake_result = MagicMock()
         fake_result.returncode = 0
         fake_result.stdout = SAMPLE_DBUS_OUTPUT
-        with patch('subprocess.run', return_value=fake_result):
+        with patch('SoundSwitch.subprocess.run', return_value=fake_result):
             result = obj.get_mpris_browser_url()
         self.assertIsNotNone(result)
         self.assertEqual(result['url'], 'https://music.youtube.com/')
@@ -97,19 +95,19 @@ class TestGetMprisBrowserUrl(unittest.TestCase):
         fake_result = MagicMock()
         fake_result.returncode = 0
         fake_result.stdout = non_http_output
-        with patch('subprocess.run', return_value=fake_result):
+        with patch('SoundSwitch.subprocess.run', return_value=fake_result):
             result = obj.get_mpris_browser_url()
         self.assertIsNone(result)
 
     def test_returns_none_on_subprocess_error(self):
         obj = self._make_window_mock()
-        with patch('subprocess.run', side_effect=FileNotFoundError):
+        with patch('SoundSwitch.subprocess.run', side_effect=FileNotFoundError):
             result = obj.get_mpris_browser_url()
         self.assertIsNone(result)
 
     def test_returns_none_on_timeout(self):
         obj = self._make_window_mock()
-        with patch('subprocess.run', side_effect=subprocess.TimeoutExpired('dbus-send', 2)):
+        with patch('SoundSwitch.subprocess.run', side_effect=subprocess.TimeoutExpired('dbus-send', 2)):
             result = obj.get_mpris_browser_url()
         self.assertIsNone(result)
 
@@ -118,7 +116,7 @@ class TestGetMprisBrowserUrl(unittest.TestCase):
         fake_result = MagicMock()
         fake_result.returncode = 1
         fake_result.stdout = ''
-        with patch('subprocess.run', return_value=fake_result):
+        with patch('SoundSwitch.subprocess.run', return_value=fake_result):
             result = obj.get_mpris_browser_url()
         self.assertIsNone(result)
 

@@ -1,6 +1,6 @@
 import sys
 import re
-import urllib.parse
+import urllib.parse  # used by stream URL display and routing (Tasks 3–4)
 import threading
 import uuid
 import subprocess
