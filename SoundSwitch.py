@@ -1,5 +1,6 @@
 import sys
 import re
+import urllib.parse
 import threading
 import uuid
 import subprocess
@@ -16,6 +17,31 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
 from PyQt5 import QtCore, QtGui
+
+BROWSER_APP_NAMES = {'brave', 'firefox', 'chromium', 'chrome', 'opera', 'vivaldi'}
+
+
+def _parse_dbus_metadata(output: str) -> dict:
+    """Parse dbus-send --print-reply output, returning string-valued keys as a flat dict.
+
+    Scans all lines for `string "KEY"` immediately followed (within 2 lines) by
+    `variant ... string "VALUE"`. Non-string variant types (boolean, int64, array)
+    are ignored.
+    """
+    result = {}
+    lines = output.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r'^\s*string "([^"]+)"\s*$', line)
+        if not m:
+            continue
+        key = m.group(1)
+        for j in range(i + 1, min(i + 3, len(lines))):
+            val_m = re.match(r'^\s*variant\s+string\s+"([^"]*)"\s*$', lines[j])
+            if val_m:
+                result[key] = val_m.group(1)
+                break
+    return result
+
 
 try:
     import dbus
@@ -1327,6 +1353,32 @@ class MainWindow(QMainWindow):
             current.setdefault('description', current['name'])
             sinks.append(current)
         return sinks
+
+    def get_mpris_browser_url(self) -> dict | None:
+        """Query Plasma Browser Integration MPRIS for the active tab URL.
+
+        Returns {'url': str, 'title': str} or None if unavailable or non-HTTP.
+        """
+        try:
+            result = subprocess.run(
+                [
+                    'dbus-send', '--print-reply',
+                    '--dest=org.mpris.MediaPlayer2.plasma-browser-integration',
+                    '/org/mpris/MediaPlayer2',
+                    'org.freedesktop.DBus.Properties.GetAll',
+                    'string:org.mpris.MediaPlayer2.Player',
+                ],
+                capture_output=True, text=True, timeout=2,
+            )
+            if result.returncode != 0:
+                return None
+            meta = _parse_dbus_metadata(result.stdout)
+            url = meta.get('xesam:url', '')
+            if not url.startswith('http'):
+                return None
+            return {'url': url, 'title': meta.get('xesam:title', '')}
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return None
 
     def get_sink_inputs(self):
         # Returns a list of dicts with 'index', 'name', 'app_name', 'sink'
