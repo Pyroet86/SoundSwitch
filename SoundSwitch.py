@@ -584,7 +584,8 @@ class NoiseCancelDialog(QDialog):
 
 
 class RulesDialog(QDialog):
-    def __init__(self, state, save_state_cb, refresh_rules_cb, parent=None, prefill_app_name=None):
+    def __init__(self, state, save_state_cb, refresh_rules_cb, parent=None,
+                 prefill_app_name=None, prefill_url=None):
         super().__init__(parent)
         self.state = state
         self._save_state_cb = save_state_cb
@@ -597,6 +598,8 @@ class RulesDialog(QDialog):
         if prefill_app_name:
             self._prefill_active = True
             self._app_input.setText(prefill_app_name)
+            if prefill_url:
+                self._url_input.setText(prefill_url)
             self._sink_combo.setCurrentIndex(0)
             self._delete_btn.setEnabled(False)
 
@@ -627,6 +630,12 @@ class RulesDialog(QDialog):
         self._app_input.setPlaceholderText('App name e.g. Firefox')
         self._app_input.returnPressed.connect(self._save_rule)
         right.addWidget(self._app_input)
+
+        right.addWidget(QLabel('URL contains (optional):'))
+        self._url_input = QLineEdit()
+        self._url_input.setPlaceholderText('e.g. music.youtube.com')
+        self._url_input.returnPressed.connect(self._save_rule)
+        right.addWidget(self._url_input)
 
         right.addWidget(QLabel('Route to:'))
         self._sink_combo = QComboBox()
@@ -661,8 +670,10 @@ class RulesDialog(QDialog):
         self._list.clear()
         for rule in self.state.get('rules', []):
             item = QListWidgetItem()
-            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
-            item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
+            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink'],
+                                        'url_pattern': rule.get('url_pattern', '')})
+            url_part = f" @ {rule['url_pattern']}" if rule.get('url_pattern') else ''
+            item.setData(Qt.DisplayRole, f"{rule['app_name']}{url_part} → {rule['sink']}")
             self._list.addItem(item)
         self._list.blockSignals(False)
 
@@ -678,6 +689,7 @@ class RulesDialog(QDialog):
             return
         rule = self.state.get('rules', [])[row]
         self._app_input.setText(rule['app_name'])
+        self._url_input.setText(rule.get('url_pattern', ''))
         idx = CUSTOM_SINKS.index(rule['sink']) if rule['sink'] in CUSTOM_SINKS else 0
         self._sink_combo.setCurrentIndex(idx)
         self._delete_btn.setEnabled(True)
@@ -686,6 +698,7 @@ class RulesDialog(QDialog):
         self._prefill_active = False
         self._list.setCurrentRow(-1)
         self._app_input.clear()
+        self._url_input.clear()
         self._sink_combo.setCurrentIndex(0)
         self._delete_btn.setEnabled(False)
 
@@ -695,22 +708,35 @@ class RulesDialog(QDialog):
             QMessageBox.warning(self, 'Missing App Name', 'Please enter an app name.')
             return
         sink = self._sink_combo.currentText()
+        url_pattern = self._url_input.text().strip()
         row = self._list.currentRow()
+
+        def is_duplicate(exclude_row):
+            for i, r in enumerate(self.state.get('rules', [])):
+                if i == exclude_row:
+                    continue
+                if (r['app_name'].lower() == app_name.lower()
+                        and r.get('url_pattern', '').lower() == url_pattern.lower()):
+                    return True
+            return False
+
         if row >= 0:
-            duplicate = [
-                i for i, r in enumerate(self.state.get('rules', []))
-                if r['app_name'].lower() == app_name.lower() and i != row
-            ]
-            if duplicate:
-                QMessageBox.warning(self, 'Duplicate Rule', f"A rule for '{app_name}' already exists.")
+            if is_duplicate(row):
+                QMessageBox.warning(self, 'Duplicate Rule',
+                                    f"A rule for '{app_name}' with that URL pattern already exists.")
                 return
-            self.state['rules'][row] = {'app_name': app_name, 'sink': sink}
+            self.state['rules'][row] = {'app_name': app_name, 'sink': sink,
+                                        **({'url_pattern': url_pattern} if url_pattern else {})}
         else:
-            existing = [r for r in self.state.get('rules', []) if r['app_name'].lower() == app_name.lower()]
-            if existing:
-                QMessageBox.warning(self, 'Duplicate Rule', f"A rule for '{app_name}' already exists.")
+            if is_duplicate(-1):
+                QMessageBox.warning(self, 'Duplicate Rule',
+                                    f"A rule for '{app_name}' with that URL pattern already exists.")
                 return
-            self.state['rules'].append({'app_name': app_name, 'sink': sink})
+            rule = {'app_name': app_name, 'sink': sink}
+            if url_pattern:
+                rule['url_pattern'] = url_pattern
+            self.state['rules'].append(rule)
+
         self._save_state_cb()
         self._refresh_rules_cb()
         self._refresh_list()
@@ -1690,8 +1716,10 @@ class MainWindow(QMainWindow):
         self.rules_list.clear()
         for rule in self.state['rules']:
             item = QListWidgetItem()
-            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink']})
-            item.setData(Qt.DisplayRole, f"{rule['app_name']} → {rule['sink']}")
+            item.setData(Qt.UserRole, {'app_name': rule['app_name'], 'sink': rule['sink'],
+                                        'url_pattern': rule.get('url_pattern', '')})
+            url_part = f" @ {rule['url_pattern']}" if rule.get('url_pattern') else ''
+            item.setData(Qt.DisplayRole, f"{rule['app_name']}{url_part} → {rule['sink']}")
             self.rules_list.addItem(item)
 
     def show_stream_context_menu(self, pos):
@@ -1702,7 +1730,8 @@ class MainWindow(QMainWindow):
         app_name = item.data(Qt.UserRole + 2)
         menu = QMenu(self)
         create_action = menu.addAction('Create Rule')
-        create_action.triggered.connect(lambda: self.open_rules_dialog_for_app(app_name))
+        create_action.triggered.connect(
+            lambda idx=stream_index: self.open_rules_dialog_for_app(app_name, stream_index=idx))
         if stream_index in self.state.get('manual_overrides', {}):
             reset_action = menu.addAction('Reset to Default Behaviour')
             reset_action.triggered.connect(lambda: self.reset_manual_override(stream_index))
@@ -2088,13 +2117,18 @@ class MainWindow(QMainWindow):
             parent=self,
         ).exec_()
 
-    def open_rules_dialog_for_app(self, app_name):
+    def open_rules_dialog_for_app(self, app_name, stream_index=None):
+        prefill_url = ''
+        if stream_index is not None:
+            url = self.stream_url_cache.get(str(stream_index), '')
+            prefill_url = _url_domain(url)
         RulesDialog(
             self.state,
             self.save_state,
             lambda: self.refresh_devices_and_sinks(force=True),
             parent=self,
             prefill_app_name=app_name,
+            prefill_url=prefill_url,
         ).exec_()
 
     def open_settings(self):
