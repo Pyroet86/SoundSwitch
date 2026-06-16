@@ -282,5 +282,71 @@ class TestMoveSinkInputLearning(unittest.TestCase):
         self.obj.move_sink_input('42', 'Aux')
         self.assertEqual(self.obj.state['url_routes'], {})
 
+class TestUrlPatternRules(unittest.TestCase):
+    def setUp(self):
+        import SoundSwitch as ss
+        self.obj = ss.MainWindow.__new__(ss.MainWindow)
+        self.obj.stream_url_cache = {'42': 'https://music.youtube.com/watch?v=abc'}
+        self.obj.hidden_streams = set()
+        self.obj.state = {
+            'rules': [
+                {'app_name': 'Brave', 'url_pattern': 'music.youtube.com', 'sink': 'Media'},
+                {'app_name': 'Brave', 'url_pattern': 'youtube.com',        'sink': 'Aux'},
+            ],
+            'manual_overrides': {},
+            'url_routes': {},
+        }
+        self.obj.apply_routing_rules = ss.MainWindow.apply_routing_rules.__get__(
+            self.obj, ss.MainWindow)
+        self.obj.update_status_bar = MagicMock()
+        self.obj.show_status = MagicMock()
+
+    def _sinks(self):
+        return [
+            {'index': '52', 'name': 'alsa_output'},
+            {'index': '60', 'name': 'Media'},
+            {'index': '61', 'name': 'Aux'},
+        ]
+
+    def test_url_pattern_routes_music_youtube(self):
+        # Stream 42 has URL music.youtube.com → should go to Media (first matching rule)
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback',
+                    'sink': '52', 'url': 'https://music.youtube.com/watch?v=abc'}]
+        self.obj.get_sinks = MagicMock(return_value=self._sinks())
+        self.obj.get_sink_inputs = MagicMock(return_value=streams)
+        self.obj.update_hidden_streams = MagicMock()
+        calls = []
+        self.obj.run_pactl = MagicMock(side_effect=lambda a: calls.append(a) or 'ok')
+        self.obj.apply_routing_rules()
+        self.assertIn(['move-sink-input', '42', 'Media'], calls)
+
+    def test_url_pattern_routes_plain_youtube(self):
+        # Stream 43 has URL www.youtube.com → should go to Aux (second rule, music pattern doesn't match)
+        self.obj.stream_url_cache['43'] = 'https://www.youtube.com/watch?v=xyz'
+        streams = [{'index': '43', 'app_name': 'Brave', 'media_name': 'Playback',
+                    'sink': '52', 'url': 'https://www.youtube.com/watch?v=xyz'}]
+        self.obj.get_sinks = MagicMock(return_value=self._sinks())
+        self.obj.get_sink_inputs = MagicMock(return_value=streams)
+        self.obj.update_hidden_streams = MagicMock()
+        calls = []
+        self.obj.run_pactl = MagicMock(side_effect=lambda a: calls.append(a) or 'ok')
+        self.obj.apply_routing_rules()
+        self.assertIn(['move-sink-input', '43', 'Aux'], calls)
+
+    def test_rule_without_url_pattern_still_matches_on_app_name(self):
+        # Backward compat: rule with no url_pattern matches all streams for that app
+        self.obj.state['rules'] = [{'app_name': 'Firefox', 'sink': 'Aux'}]
+        self.obj.stream_url_cache = {}
+        streams = [{'index': '55', 'app_name': 'Firefox', 'media_name': 'Video',
+                    'sink': '52', 'url': ''}]
+        self.obj.get_sinks = MagicMock(return_value=self._sinks())
+        self.obj.get_sink_inputs = MagicMock(return_value=streams)
+        self.obj.update_hidden_streams = MagicMock()
+        calls = []
+        self.obj.run_pactl = MagicMock(side_effect=lambda a: calls.append(a) or 'ok')
+        self.obj.apply_routing_rules()
+        self.assertIn(['move-sink-input', '55', 'Aux'], calls)
+
+
 if __name__ == '__main__':
     unittest.main()
