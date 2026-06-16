@@ -1160,7 +1160,7 @@ class MainWindow(QMainWindow):
         # Build a snapshot: sorted sinks, sorted streams, sorted input sources, default sink
         snapshot = (
             tuple(sorted((s['index'], s['name']) for s in sinks)),
-            tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name')) for s in sink_inputs)),
+            tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name'), s.get('url', '')) for s in sink_inputs)),
             tuple(sorted(s['name'] for s in input_sources)),
             default_sink
         )
