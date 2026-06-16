@@ -1763,13 +1763,16 @@ class MainWindow(QMainWindow):
                                      if s['index'] not in self.hidden_streams
                                      and not s.get('sink_name', '').startswith('rnnoise_')]):
             main_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']}) - {stream.get('sink_name', 'Unknown')}"
-            sub_label = stream.get('media_name', '')
+            url = stream.get('url', '')
+            domain = urllib.parse.urlparse(url).netloc if url else ''
+            sub_label = domain if domain else stream.get('media_name', '')
             item = QListWidgetItem()
             item.setData(Qt.DisplayRole, main_label)
             item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
             item.setData(Qt.ItemDataRole.UserRole, stream['index'])
             item.setData(Qt.UserRole + 2, stream.get('app_name', ''))
-            item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}\nSink: {stream.get('sink_name', 'Unknown')}\nMedia: {stream.get('media_name', '')}")
+            tooltip_extra = f"\nURL: {url}" if url else f"\nMedia: {stream.get('media_name', '')}"
+            item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}\nSink: {stream.get('sink_name', 'Unknown')}{tooltip_extra}")
             # Dark alternating row colors
             if i % 2 == 0:
                 item.setBackground(QBrush(QColor('#232629')))
@@ -1782,15 +1785,19 @@ class MainWindow(QMainWindow):
             sink_list.clear()
             streams = [s for s in sink_map.get(sink, []) if s['index'] not in self.hidden_streams]
             for j, stream in enumerate(streams):
+                url = stream.get('url', '')
+                domain = urllib.parse.urlparse(url).netloc if url else ''
                 media_name = stream.get('media_name', '')
                 app_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']})"
-                main_label = media_name if media_name else app_label
-                sub_label = app_label if media_name else ''
+                enriched = domain if domain else media_name
+                main_label = enriched if enriched else app_label
+                sub_label = app_label if enriched else ''
                 stream_item = QListWidgetItem()
                 stream_item.setData(Qt.DisplayRole, main_label)
                 stream_item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
                 stream_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-                stream_item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}\nMedia: {stream.get('media_name', '')}")
+                tooltip_extra = f"\nURL: {url}" if url else f"\nMedia: {media_name}"
+                stream_item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}{tooltip_extra}")
                 # Dark alternating row colors
                 if j % 2 == 0:
                     stream_item.setBackground(QBrush(QColor('#232629')))
