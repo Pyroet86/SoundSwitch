@@ -1012,6 +1012,7 @@ class MainWindow(QMainWindow):
         if 'osd_duration' not in self.state:
             self.state['osd_duration'] = 3
         self._last_snapshot = None
+        self.stream_url_cache: dict = {}   # stream_index (str) → full URL
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
         self.init_ui()
@@ -1380,6 +1381,37 @@ class MainWindow(QMainWindow):
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             return None
 
+    def update_stream_urls(self, sink_inputs: list) -> None:
+        """Update stream_url_cache from MPRIS and attach 'url' key to each stream dict.
+
+        Queries MPRIS at most once per call, tagging the first untagged browser
+        stream found. If multiple browser streams are new simultaneously, subsequent
+        refresh ticks will tag the remaining ones.
+        """
+        live_indices = {s['index'] for s in sink_inputs}
+
+        # Remove stale entries for streams that no longer exist
+        for idx in list(self.stream_url_cache):
+            if idx not in live_indices:
+                del self.stream_url_cache[idx]
+
+        # Find browser streams not yet in the cache
+        untagged = [
+            s for s in sink_inputs
+            if s.get('app_name', '').lower() in BROWSER_APP_NAMES
+            and s['index'] not in self.stream_url_cache
+        ]
+
+        if untagged:
+            mpris = self.get_mpris_browser_url()
+            if mpris:
+                # Tag only the first untagged stream; the rest on subsequent ticks
+                self.stream_url_cache[untagged[0]['index']] = mpris['url']
+
+        # Attach cached URL to every stream dict for downstream use
+        for s in sink_inputs:
+            s['url'] = self.stream_url_cache.get(s['index'], '')
+
     def get_sink_inputs(self):
         # Returns a list of dicts with 'index', 'name', 'app_name', 'sink'
         output = self.run_pactl(['list', 'sink-inputs'])
@@ -1709,6 +1741,7 @@ class MainWindow(QMainWindow):
         sinks = self.get_sinks()
         sink_inputs = self.get_sink_inputs()
         self.update_hidden_streams(sink_inputs)
+        self.update_stream_urls(sink_inputs)          # ← add this line
         sink_index_to_name = {sink['index']: sink['name'] for sink in sinks}
         sink_map = {sink['name']: [] for sink in sinks}
         for stream in sink_inputs:

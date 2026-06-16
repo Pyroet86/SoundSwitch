@@ -121,5 +121,67 @@ class TestGetMprisBrowserUrl(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class TestUpdateStreamUrls(unittest.TestCase):
+    """Tests for the stream URL caching logic."""
+
+    def setUp(self):
+        """Build a minimal MainWindow-like object with stream_url_cache."""
+        import SoundSwitch as ss
+        self.obj = ss.MainWindow.__new__(ss.MainWindow)
+        self.obj.stream_url_cache = {}
+        self.obj.get_mpris_browser_url = ss.MainWindow.get_mpris_browser_url.__get__(
+            self.obj, ss.MainWindow)
+        self.obj.update_stream_urls = ss.MainWindow.update_stream_urls.__get__(
+            self.obj, ss.MainWindow)
+
+    def test_browser_stream_gets_tagged_with_mpris_url(self):
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback'}]
+        mpris = {'url': 'https://music.youtube.com/', 'title': 'Black & White'}
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
+            self.obj.update_stream_urls(streams)
+        self.assertEqual(self.obj.stream_url_cache.get('42'), 'https://music.youtube.com/')
+        self.assertEqual(streams[0].get('url'), 'https://music.youtube.com/')
+
+    def test_non_browser_stream_not_tagged(self):
+        streams = [{'index': '10', 'app_name': 'Spotify', 'media_name': 'My Song'}]
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value={'url': 'https://x.com/', 'title': ''}):
+            self.obj.update_stream_urls(streams)
+        self.assertNotIn('10', self.obj.stream_url_cache)
+        self.assertEqual(streams[0].get('url', ''), '')
+
+    def test_already_cached_stream_not_re_queried(self):
+        self.obj.stream_url_cache['42'] = 'https://music.youtube.com/'
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback'}]
+        with patch.object(self.obj, 'get_mpris_browser_url') as mock_mpris:
+            self.obj.update_stream_urls(streams)
+        mock_mpris.assert_not_called()
+        self.assertEqual(streams[0].get('url'), 'https://music.youtube.com/')
+
+    def test_stale_cache_entry_removed_when_stream_gone(self):
+        self.obj.stream_url_cache['99'] = 'https://old.example.com/'
+        streams = [{'index': '42', 'app_name': 'Spotify', 'media_name': 'X'}]
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=None):
+            self.obj.update_stream_urls(streams)
+        self.assertNotIn('99', self.obj.stream_url_cache)
+
+    def test_mpris_unavailable_leaves_stream_untagged(self):
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback'}]
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=None):
+            self.obj.update_stream_urls(streams)
+        self.assertNotIn('42', self.obj.stream_url_cache)
+        self.assertEqual(streams[0].get('url', ''), '')
+
+    def test_first_untagged_stream_gets_tagged_when_two_appear(self):
+        streams = [
+            {'index': '10', 'app_name': 'Brave', 'media_name': 'Playback'},
+            {'index': '20', 'app_name': 'Brave', 'media_name': 'Playback'},
+        ]
+        mpris = {'url': 'https://music.youtube.com/', 'title': ''}
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
+            self.obj.update_stream_urls(streams)
+        self.assertEqual(self.obj.stream_url_cache.get('10'), 'https://music.youtube.com/')
+        self.assertNotIn('20', self.obj.stream_url_cache)
+
+
 if __name__ == '__main__':
     unittest.main()
