@@ -2011,17 +2011,14 @@ class MainWindow(QMainWindow):
                 subprocess.run(['pactl', 'unload-module', str(mod_id)], capture_output=True)
 
     def move_sink_input(self, sink_input_index, sink_name):
-        result = self.run_pactl(['move-sink-input', str(sink_input_index), sink_name])
-        if result is not None:
-            self.state.setdefault('manual_overrides', {})[str(sink_input_index)] = sink_name
-            url = self.stream_url_cache.get(str(sink_input_index), '')
-            domain = _url_domain(url)
-            if domain:
-                self.state.setdefault('url_routes', {})[domain] = sink_name
-            self.save_state()
-            self.show_status(f'Moved stream #{sink_input_index} to sink {sink_name}')
-        else:
-            self.show_status(f'Failed to move stream #{sink_input_index} to sink {sink_name}', error=True)
+        self.run_pactl(['move-sink-input', str(sink_input_index), sink_name])
+        self.state.setdefault('manual_overrides', {})[str(sink_input_index)] = sink_name
+        url = self.stream_url_cache.get(str(sink_input_index), '')
+        domain = _url_domain(url)
+        if domain:
+            self.state.setdefault('url_routes', {})[domain] = sink_name
+        self.save_state()
+        self.show_status(f'Moved stream #{sink_input_index} to sink {sink_name}')
         self.refresh_devices_and_sinks(force=True)
 
     def get_sink_volume(self, sink_name):

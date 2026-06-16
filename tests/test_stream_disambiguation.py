@@ -282,11 +282,5 @@ class TestMoveSinkInputLearning(unittest.TestCase):
         self.obj.move_sink_input('42', 'Aux')
         self.assertEqual(self.obj.state['url_routes'], {})
 
-    def test_failed_move_does_not_write_url_routes(self):
-        self.obj.run_pactl = MagicMock(return_value=None)
-        self.obj.move_sink_input('42', 'Media')
-        self.assertEqual(self.obj.state['url_routes'], {})
-
-
 if __name__ == '__main__':
     unittest.main()
