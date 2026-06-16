@@ -1741,7 +1741,7 @@ class MainWindow(QMainWindow):
         sinks = self.get_sinks()
         sink_inputs = self.get_sink_inputs()
         self.update_hidden_streams(sink_inputs)
-        self.update_stream_urls(sink_inputs)          # ← add this line
+        self.update_stream_urls(sink_inputs)
         sink_index_to_name = {sink['index']: sink['name'] for sink in sinks}
         sink_map = {sink['name']: [] for sink in sinks}
         for stream in sink_inputs:
