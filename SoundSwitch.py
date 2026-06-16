@@ -1,6 +1,6 @@
 import sys
 import re
-import urllib.parse  # used by stream URL display and routing (Tasks 3–4)
+import urllib.parse
 import threading
 import uuid
 import subprocess
@@ -1193,9 +1193,10 @@ class MainWindow(QMainWindow):
         # Build a snapshot: sorted sinks, sorted streams, sorted input sources, default sink
         snapshot = (
             tuple(sorted((s['index'], s['name']) for s in sinks)),
-            tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name'), s.get('url', '')) for s in sink_inputs)),
+            tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name')) for s in sink_inputs)),
             tuple(sorted(s['name'] for s in input_sources)),
-            default_sink
+            default_sink,
+            tuple(sorted(self.stream_url_cache.items())),
         )
         if snapshot != self._last_snapshot:
             self.refresh_devices_and_sinks(force=True)
@@ -1785,6 +1786,10 @@ class MainWindow(QMainWindow):
     def reset_manual_override(self, stream_index):
         if stream_index in self.state['manual_overrides']:
             del self.state['manual_overrides'][stream_index]
+            url = self.stream_url_cache.get(str(stream_index), '')
+            domain = _url_domain(url)
+            if domain and domain in self.state.get('url_routes', {}):
+                del self.state['url_routes'][domain]
             self.save_state()
             self.refresh_devices_and_sinks(force=True)
             self.show_status(f'Reset manual override for stream #{stream_index}')
@@ -1822,7 +1827,7 @@ class MainWindow(QMainWindow):
                                      and not s.get('sink_name', '').startswith('rnnoise_')]):
             main_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']}) - {stream.get('sink_name', 'Unknown')}"
             url = stream.get('url', '')
-            domain = urllib.parse.urlparse(url).netloc if url else ''
+            domain = _url_domain(url)
             sub_label = domain if domain else stream.get('media_name', '')
             item = QListWidgetItem()
             item.setData(Qt.DisplayRole, main_label)
@@ -1844,7 +1849,7 @@ class MainWindow(QMainWindow):
             streams = [s for s in sink_map.get(sink, []) if s['index'] not in self.hidden_streams]
             for j, stream in enumerate(streams):
                 url = stream.get('url', '')
-                domain = urllib.parse.urlparse(url).netloc if url else ''
+                domain = _url_domain(url)
                 media_name = stream.get('media_name', '')
                 app_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']})"
                 enriched = domain if domain else media_name
