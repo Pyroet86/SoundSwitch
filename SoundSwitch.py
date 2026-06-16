@@ -43,6 +43,13 @@ def _parse_dbus_metadata(output: str) -> dict:
     return result
 
 
+def _url_domain(url: str) -> str:
+    """Return the netloc (domain) of an http(s) URL, or '' for non-HTTP or empty input."""
+    if not url.startswith('http'):
+        return ''
+    return urllib.parse.urlparse(url).netloc
+
+
 try:
     import dbus
     from dbus.mainloop.glib import DBusGMainLoop
@@ -1640,21 +1647,43 @@ class MainWindow(QMainWindow):
         sink_inputs = self.get_sink_inputs()
         self.update_hidden_streams(sink_inputs)
         sink_index_to_name = {sink['index']: sink['name'] for sink in sinks}
-        for rule in self.state.get('rules', []):
-            for stream in sink_inputs:
-                if stream['index'] in self.hidden_streams:
+        url_routes = self.state.get('url_routes', {})
+
+        for stream in sink_inputs:
+            if stream['index'] in self.hidden_streams:
+                continue
+            sink_index = stream.get('sink', None)
+            sink_name = sink_index_to_name.get(sink_index, 'Unknown') if sink_index else 'Unknown'
+            manual = self.state.get('manual_overrides', {}).get(str(stream['index']))
+            if manual:
+                continue
+
+            stream_url = self.stream_url_cache.get(stream['index'], '')
+            domain = _url_domain(stream_url)
+
+            # Layer 1: url_routes (implicit memory from drag history, domain-keyed)
+            if domain and domain in url_routes:
+                target = url_routes[domain]
+                if sink_name != target:
+                    self.run_pactl(['move-sink-input', str(stream['index']), target])
+                    self.show_status(
+                        f"Auto-moved {stream.get('app_name', '?')} ({domain}) to {target}")
+                continue
+
+            # Layer 2: named rules (app_name match, optional url_pattern)
+            stream_url_for_rules = stream.get('url', stream_url)
+            for rule in self.state.get('rules', []):
+                if stream.get('app_name', '').lower() != rule['app_name'].lower():
                     continue
-                # Skip if manual override exists and matches current sink
-                if str(stream['index']) in self.state.get('manual_overrides', {}):
-                    if self.state['manual_overrides'][str(stream['index'])] == stream.get('sink_name'):
-                        continue
-                sink_index = stream.get('sink', None)
-                sink_name = sink_index_to_name.get(sink_index, 'Unknown') if sink_index else 'Unknown'
-                if stream.get('app_name', '').lower() == rule['app_name'].lower() and sink_name != rule['sink']:
+                url_pattern = rule.get('url_pattern', '')
+                if url_pattern and url_pattern.lower() not in stream_url_for_rules.lower():
+                    continue
+                if sink_name != rule['sink']:
                     self.run_pactl(['move-sink-input', str(stream['index']), rule['sink']])
-                    self.show_status(f"Auto-moved {stream['app_name']} (#{stream['index']}) to {rule['sink']}")
-        
-        # Update status bar after applying rules
+                    self.show_status(
+                        f"Auto-moved {stream.get('app_name', '?')} (#{stream['index']}) to {rule['sink']}")
+                break
+
         self.update_status_bar()
 
     def refresh_rules_list(self):
@@ -1982,11 +2011,13 @@ class MainWindow(QMainWindow):
                 subprocess.run(['pactl', 'unload-module', str(mod_id)], capture_output=True)
 
     def move_sink_input(self, sink_input_index, sink_name):
-        # Move the sink input to the selected sink
         result = self.run_pactl(['move-sink-input', str(sink_input_index), sink_name])
         if result is not None:
-            # Track manual override
             self.state.setdefault('manual_overrides', {})[str(sink_input_index)] = sink_name
+            url = self.stream_url_cache.get(str(sink_input_index), '')
+            domain = _url_domain(url)
+            if domain:
+                self.state.setdefault('url_routes', {})[domain] = sink_name
             self.save_state()
             self.show_status(f'Moved stream #{sink_input_index} to sink {sink_name}')
         else:

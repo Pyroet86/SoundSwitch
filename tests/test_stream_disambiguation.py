@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from SoundSwitch import _parse_dbus_metadata
+from SoundSwitch import _parse_dbus_metadata, _url_domain
 
 SAMPLE_DBUS_OUTPUT = """\
 method return time=1781646353.121208 sender=:1.70 -> destination=:1.123 serial=379 reply_serial=2
@@ -181,6 +181,111 @@ class TestUpdateStreamUrls(unittest.TestCase):
             self.obj.update_stream_urls(streams)
         self.assertEqual(self.obj.stream_url_cache.get('10'), 'https://music.youtube.com/')
         self.assertNotIn('20', self.obj.stream_url_cache)
+
+
+class TestUrlRoutesMatching(unittest.TestCase):
+    def test_domain_extracted_from_full_url(self):
+        self.assertEqual(_url_domain('https://music.youtube.com/watch?v=abc'), 'music.youtube.com')
+
+    def test_domain_extracted_from_root_url(self):
+        self.assertEqual(_url_domain('https://music.youtube.com/'), 'music.youtube.com')
+
+    def test_empty_url_returns_empty_string(self):
+        self.assertEqual(_url_domain(''), '')
+
+    def test_non_http_url_returns_empty_string(self):
+        self.assertEqual(_url_domain('spotify:track:123'), '')
+
+
+class TestApplyUrlRoutes(unittest.TestCase):
+    """Integration-style tests for the url_routes routing layer."""
+
+    def setUp(self):
+        import SoundSwitch as ss
+        self.obj = ss.MainWindow.__new__(ss.MainWindow)
+        self.obj.stream_url_cache = {'42': 'https://music.youtube.com/'}
+        self.obj.hidden_streams = set()
+        self.obj.state = {
+            'rules': [],
+            'manual_overrides': {},
+            'url_routes': {'music.youtube.com': 'Media'},
+        }
+        self.obj.apply_routing_rules = ss.MainWindow.apply_routing_rules.__get__(
+            self.obj, ss.MainWindow)
+        self.obj.update_status_bar = MagicMock()
+        self.obj.show_status = MagicMock()
+
+    def _make_sinks(self):
+        return [
+            {'index': '52', 'name': 'alsa_output'},
+            {'index': '60', 'name': 'Media'},
+            {'index': '61', 'name': 'Aux'},
+        ]
+
+    def test_url_routes_moves_stream_to_correct_sink(self):
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback',
+                    'sink': '52', 'url': 'https://music.youtube.com/'}]
+        sinks = self._make_sinks()
+        self.obj.get_sinks = MagicMock(return_value=sinks)
+        self.obj.get_sink_inputs = MagicMock(return_value=streams)
+        self.obj.update_hidden_streams = MagicMock()
+        pactl_calls = []
+        self.obj.run_pactl = MagicMock(side_effect=lambda args: pactl_calls.append(args) or 'ok')
+        self.obj.apply_routing_rules()
+        self.assertIn(['move-sink-input', '42', 'Media'], pactl_calls)
+
+    def test_url_routes_skips_stream_already_in_correct_sink(self):
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback',
+                    'sink': '60', 'url': 'https://music.youtube.com/'}]
+        sinks = self._make_sinks()
+        self.obj.get_sinks = MagicMock(return_value=sinks)
+        self.obj.get_sink_inputs = MagicMock(return_value=streams)
+        self.obj.update_hidden_streams = MagicMock()
+        self.obj.run_pactl = MagicMock(return_value='ok')
+        self.obj.apply_routing_rules()
+        self.obj.run_pactl.assert_not_called()
+
+    def test_url_routes_respects_manual_override(self):
+        self.obj.state['manual_overrides'] = {'42': 'Media'}
+        streams = [{'index': '42', 'app_name': 'Brave', 'media_name': 'Playback',
+                    'sink': '61', 'url': 'https://music.youtube.com/'}]
+        sinks = self._make_sinks()
+        self.obj.get_sinks = MagicMock(return_value=sinks)
+        self.obj.get_sink_inputs = MagicMock(return_value=streams)
+        self.obj.update_hidden_streams = MagicMock()
+        self.obj.run_pactl = MagicMock(return_value='ok')
+        self.obj.apply_routing_rules()
+        self.obj.run_pactl.assert_not_called()
+
+
+class TestMoveSinkInputLearning(unittest.TestCase):
+    def setUp(self):
+        import SoundSwitch as ss
+        self.obj = ss.MainWindow.__new__(ss.MainWindow)
+        self.obj.stream_url_cache = {'42': 'https://music.youtube.com/watch?v=abc'}
+        self.obj.state = {'manual_overrides': {}, 'url_routes': {}}
+        self.obj.move_sink_input = ss.MainWindow.move_sink_input.__get__(
+            self.obj, ss.MainWindow)
+        self.obj.show_status = MagicMock()
+        self.obj.save_state = MagicMock()
+        self.obj.refresh_devices_and_sinks = MagicMock()
+
+    def test_manual_move_writes_domain_to_url_routes(self):
+        self.obj.run_pactl = MagicMock(return_value='ok')
+        self.obj.move_sink_input('42', 'Media')
+        self.assertEqual(self.obj.state['url_routes'].get('music.youtube.com'), 'Media')
+        self.obj.save_state.assert_called()
+
+    def test_manual_move_without_url_does_not_write_url_routes(self):
+        self.obj.stream_url_cache = {}
+        self.obj.run_pactl = MagicMock(return_value='ok')
+        self.obj.move_sink_input('42', 'Aux')
+        self.assertEqual(self.obj.state['url_routes'], {})
+
+    def test_failed_move_does_not_write_url_routes(self):
+        self.obj.run_pactl = MagicMock(return_value=None)
+        self.obj.move_sink_input('42', 'Media')
+        self.assertEqual(self.obj.state['url_routes'], {})
 
 
 if __name__ == '__main__':
