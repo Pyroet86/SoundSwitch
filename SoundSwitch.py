@@ -24,9 +24,9 @@ BROWSER_APP_NAMES = {'brave', 'firefox', 'chromium', 'chrome', 'opera', 'vivaldi
 def _parse_dbus_metadata(output: str) -> dict:
     """Parse dbus-send --print-reply output, returning string-valued keys as a flat dict.
 
-    Scans all lines for `string "KEY"` immediately followed (within 2 lines) by
-    `variant ... string "VALUE"`. Non-string variant types (boolean, int64, array)
-    are ignored.
+    Handles both direct string variants (`variant string "VALUE"`) and the first
+    element of array-of-string variants (`variant array [ string "VALUE" ]`), which
+    is how xesam:artist is encoded in the MPRIS spec.
     """
     result = {}
     lines = output.splitlines()
@@ -36,9 +36,18 @@ def _parse_dbus_metadata(output: str) -> dict:
             continue
         key = m.group(1)
         for j in range(i + 1, min(i + 3, len(lines))):
+            # Direct string variant
             val_m = re.match(r'^\s*variant\s+string\s+"([^"]*)"\s*$', lines[j])
             if val_m:
                 result[key] = val_m.group(1)
+                break
+            # Array-of-strings variant: capture the first element
+            if 'variant' in lines[j] and 'array' in lines[j]:
+                for k in range(j + 1, min(j + 3, len(lines))):
+                    arr_m = re.match(r'^\s*string "([^"]*)"\s*$', lines[k])
+                    if arr_m:
+                        result[key] = arr_m.group(1)
+                        break
                 break
     return result
 
@@ -1045,7 +1054,8 @@ class MainWindow(QMainWindow):
         if 'osd_duration' not in self.state:
             self.state['osd_duration'] = 3
         self._last_snapshot = None
-        self.stream_url_cache: dict = {}   # stream_index (str) → full URL
+        self.stream_url_cache: dict = {}    # stream_index (str) → full URL
+        self.stream_meta_cache: dict = {}   # stream_index (str) → {'title': str, 'artist': str}
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
         self.init_ui()
@@ -1411,16 +1421,17 @@ class MainWindow(QMainWindow):
             url = meta.get('xesam:url', '')
             if not url.startswith('http'):
                 return None
-            return {'url': url, 'title': meta.get('xesam:title', '')}
+            return {'url': url, 'title': meta.get('xesam:title', ''),
+                    'artist': meta.get('xesam:artist', '')}
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             return None
 
     def update_stream_urls(self, sink_inputs: list) -> None:
-        """Update stream_url_cache from MPRIS and attach 'url' key to each stream dict.
+        """Update URL/meta caches from MPRIS and attach url/title/artist to each stream dict.
 
-        Queries MPRIS at most once per call, tagging the most recently created
-        untagged browser stream (highest index). If the MPRIS domain is already
-        cached for any live stream, MPRIS is reflecting that stream — skip.
+        Queries MPRIS once per call whenever any browser stream is present so that
+        media metadata (title, artist) stays current. URL tagging (routing) only
+        happens for newly untagged streams under the same disambiguation rules.
         """
         live_indices = {s['index'] for s in sink_inputs}
 
@@ -1428,37 +1439,45 @@ class MainWindow(QMainWindow):
         for idx in list(self.stream_url_cache):
             if idx not in live_indices:
                 del self.stream_url_cache[idx]
+                self.stream_meta_cache.pop(idx, None)
 
-        # Find browser streams not yet in the cache
-        untagged = [
+        browser_streams = [
             s for s in sink_inputs
             if s.get('app_name', '').lower() in BROWSER_APP_NAMES
-            and s['index'] not in self.stream_url_cache
         ]
 
-        if untagged:
-            # If untagged streams span multiple different browsers, we can't know
-            # which one the MPRIS URL belongs to — skip until unambiguous.
-            untagged_apps = {s.get('app_name', '').lower() for s in untagged}
-            if len(untagged_apps) == 1:
-                mpris = self.get_mpris_browser_url()
-                if mpris:
-                    mpris_domain = _url_domain(mpris['url'])
-                    # If the MPRIS domain is already cached for any live stream,
-                    # MPRIS is reflecting that known stream, not an untagged one.
-                    # Wait until the user focuses a different tab (domain changes).
-                    if not any(_url_domain(u) == mpris_domain
-                               for u in self.stream_url_cache.values()):
-                        # Tag the most recently created stream (highest index).
-                        # MPRIS reflects whichever tab the user just activated,
-                        # which is most likely the newest stream, not an older one
-                        # that was left untagged from a previous failed query.
-                        newest = max(untagged, key=lambda s: int(s['index']))
-                        self.stream_url_cache[newest['index']] = mpris['url']
+        if browser_streams:
+            mpris = self.get_mpris_browser_url()
+            if mpris:
+                mpris_domain = _url_domain(mpris['url'])
+                meta = {'title': mpris.get('title', ''), 'artist': mpris.get('artist', '')}
 
-        # Attach cached URL to every stream dict for downstream use
+                # Update metadata for the stream whose cached domain matches MPRIS.
+                # This keeps title/artist live as the user changes songs or tabs.
+                for s in browser_streams:
+                    if (_url_domain(self.stream_url_cache.get(s['index'], ''))
+                            == mpris_domain):
+                        self.stream_meta_cache[s['index']] = meta
+
+                # URL tagging for untagged streams
+                untagged = [s for s in browser_streams
+                            if s['index'] not in self.stream_url_cache]
+                if untagged:
+                    untagged_apps = {s.get('app_name', '').lower() for s in untagged}
+                    if len(untagged_apps) == 1:
+                        if not any(_url_domain(u) == mpris_domain
+                                   for u in self.stream_url_cache.values()):
+                            newest = max(untagged, key=lambda s: int(s['index']))
+                            self.stream_url_cache[newest['index']] = mpris['url']
+                            self.stream_meta_cache[newest['index']] = meta
+
+        # Attach url/title/artist to every stream dict for downstream display
         for s in sink_inputs:
-            s['url'] = self.stream_url_cache.get(s['index'], '')
+            idx = s['index']
+            s['url'] = self.stream_url_cache.get(idx, '')
+            cached_meta = self.stream_meta_cache.get(idx, {})
+            s['title'] = cached_meta.get('title', '')
+            s['artist'] = cached_meta.get('artist', '')
 
     def get_sink_inputs(self):
         # Returns a list of dicts with 'index', 'name', 'app_name', 'sink'
@@ -1842,14 +1861,31 @@ class MainWindow(QMainWindow):
             main_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']}) - {stream.get('sink_name', 'Unknown')}"
             url = stream.get('url', '')
             domain = _url_domain(url)
-            sub_label = domain if domain else stream.get('media_name', '')
+            title = stream.get('title', '')
+            artist = stream.get('artist', '')
+            if domain:
+                if artist and title:
+                    sub_label = f"{domain} — {artist} - {title}"
+                elif title:
+                    sub_label = f"{domain} — {title}"
+                else:
+                    sub_label = domain
+            else:
+                sub_label = stream.get('media_name', '')
             item = QListWidgetItem()
             item.setData(Qt.DisplayRole, main_label)
             item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
             item.setData(Qt.ItemDataRole.UserRole, stream['index'])
             item.setData(Qt.UserRole + 2, stream.get('app_name', ''))
-            tooltip_extra = f"\nURL: {url}" if url else f"\nMedia: {stream.get('media_name', '')}"
-            item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}\nSink: {stream.get('sink_name', 'Unknown')}{tooltip_extra}")
+            tooltip_parts = [f"App: {stream.get('app_name', 'Unknown App')}",
+                             f"Sink: {stream.get('sink_name', 'Unknown')}"]
+            if url:
+                tooltip_parts.append(f"URL: {url}")
+            if title:
+                tooltip_parts.append(f"Title: {artist} - {title}" if artist else f"Title: {title}")
+            elif not url:
+                tooltip_parts.append(f"Media: {stream.get('media_name', '')}")
+            item.setToolTip('\n'.join(tooltip_parts))
             # Dark alternating row colors
             if i % 2 == 0:
                 item.setBackground(QBrush(QColor('#232629')))
@@ -1864,17 +1900,33 @@ class MainWindow(QMainWindow):
             for j, stream in enumerate(streams):
                 url = stream.get('url', '')
                 domain = _url_domain(url)
+                title = stream.get('title', '')
+                artist = stream.get('artist', '')
                 media_name = stream.get('media_name', '')
                 app_label = f"{stream.get('app_name', 'Unknown App')} (#{stream['index']})"
-                enriched = domain if domain else media_name
+                if domain:
+                    if artist and title:
+                        enriched = f"{domain} — {artist} - {title}"
+                    elif title:
+                        enriched = f"{domain} — {title}"
+                    else:
+                        enriched = domain
+                else:
+                    enriched = media_name
                 main_label = enriched if enriched else app_label
                 sub_label = app_label if enriched else ''
                 stream_item = QListWidgetItem()
                 stream_item.setData(Qt.DisplayRole, main_label)
                 stream_item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
                 stream_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-                tooltip_extra = f"\nURL: {url}" if url else f"\nMedia: {media_name}"
-                stream_item.setToolTip(f"App: {stream.get('app_name', 'Unknown App')}{tooltip_extra}")
+                tooltip_parts = [f"App: {stream.get('app_name', 'Unknown App')}"]
+                if url:
+                    tooltip_parts.append(f"URL: {url}")
+                if title:
+                    tooltip_parts.append(f"Title: {artist} - {title}" if artist else f"Title: {title}")
+                elif not url:
+                    tooltip_parts.append(f"Media: {media_name}")
+                stream_item.setToolTip('\n'.join(tooltip_parts))
                 # Dark alternating row colors
                 if j % 2 == 0:
                     stream_item.setBackground(QBrush(QColor('#232629')))
