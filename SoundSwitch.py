@@ -329,10 +329,43 @@ class MuteButton(QPushButton):
         painter.end()
 
 
-class StreamVolumeControl(QWidget):
+class SnapSlider(QSlider):
     _SNAP_TARGET = 100
-    _SNAP_ZONE = 3
+    _SNAP_ZONE = 5
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dragging = False
+        self.sliderPressed.connect(self._on_press)
+        self.sliderReleased.connect(self._on_release)
+        self.sliderMoved.connect(self._snap_check)
+
+    def _on_press(self):
+        self._dragging = True
+        self.update()
+
+    def _on_release(self):
+        self._dragging = False
+        self.update()
+
+    def _snap_check(self, value):
+        if abs(value - self._SNAP_TARGET) <= self._SNAP_ZONE:
+            self.setValue(self._SNAP_TARGET)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self._dragging:
+            painter = QPainter(self)
+            font = painter.font()
+            font.setPointSize(8)
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QColor('#f0f0f0'))
+            painter.drawText(self.rect(), Qt.AlignCenter, f'{self.value()}%')
+            painter.end()
+
+
+class StreamVolumeControl(QWidget):
     def __init__(self, stream_index, volume_pct, muted, toggle_cb, set_volume_cb, bg='#232629', parent=None):
         super().__init__(parent)
         self.setStyleSheet(f'background: {bg};')
@@ -341,7 +374,7 @@ class StreamVolumeControl(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self._slider = QSlider(Qt.Horizontal)
+        self._slider = SnapSlider(Qt.Horizontal)
         self._slider.setRange(0, 150)
         self._slider.setValue(volume_pct)
         self._slider.setMaximumWidth(0)
@@ -363,7 +396,6 @@ class StreamVolumeControl(QWidget):
             '}'
         )
         self._slider.valueChanged.connect(lambda v: set_volume_cb(stream_index, v))
-        self._slider.sliderMoved.connect(self._snap_check)
 
         self._mute_btn = MuteButton(stream_index, muted, toggle_cb)
 
@@ -371,10 +403,6 @@ class StreamVolumeControl(QWidget):
         layout.addWidget(self._mute_btn)
 
         self._anim = QPropertyAnimation(self._slider, b'maximumWidth')
-
-    def _snap_check(self, value):
-        if abs(value - self._SNAP_TARGET) <= self._SNAP_ZONE:
-            self._slider.setValue(self._SNAP_TARGET)
 
     def enterEvent(self, event):
         self._anim.stop()
