@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
     QStyledItemDelegate, QStyle, QLineEdit,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
-    QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider,
+    QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider, QFrame,
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor, QBrush, QPalette, QPainter, QPixmap, QPen, QPainterPath
@@ -1338,7 +1338,7 @@ class MainWindow(QMainWindow):
         for sink in CUSTOM_SINKS:
             pane = QWidget()
             pane_layout = QVBoxLayout(pane)
-            pane_layout.setSpacing(0)
+            pane_layout.setSpacing(6)
             pane_layout.setContentsMargins(0, 0, 0, 0)
             label = QLabel(sink)
             label.setAlignment(Qt.AlignCenter)
@@ -1990,7 +1990,7 @@ class MainWindow(QMainWindow):
                 bg = '#232629' if j % 2 == 0 else '#2d2f31'
 
                 stream_item = QListWidgetItem()
-                stream_item.setSizeHint(QtCore.QSize(0, 52))
+                stream_item.setSizeHint(QtCore.QSize(0, 60))
                 stream_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 tooltip_parts = [f"App: {stream.get('app_name', 'Unknown App')}"]
                 if url:
@@ -2001,10 +2001,17 @@ class MainWindow(QMainWindow):
                     tooltip_parts.append(f"Media: {media_name}")
                 stream_item.setToolTip('\n'.join(tooltip_parts))
 
-                widget = QWidget()
-                widget.setStyleSheet(f'background: {bg};')
-                widget.setToolTip('\n'.join(tooltip_parts))
-                row = QHBoxLayout(widget)
+                outer = QWidget()
+                outer.setStyleSheet('background: #181a1d;')
+                outer.setToolTip('\n'.join(tooltip_parts))
+                outer_layout = QVBoxLayout(outer)
+                outer_layout.setContentsMargins(3, 3, 3, 3)
+                outer_layout.setSpacing(0)
+
+                card = QFrame()
+                card.setStyleSheet(
+                    f'QFrame {{ background: {bg}; border: 1px solid #444; border-radius: 8px; }}')
+                row = QHBoxLayout(card)
                 row.setContentsMargins(8, 4, 4, 4)
                 row.setSpacing(4)
 
@@ -2028,8 +2035,9 @@ class MainWindow(QMainWindow):
                 row.addWidget(MuteButton(stream['index'], stream.get('muted', False),
                                          self.toggle_stream_mute))
 
+                outer_layout.addWidget(card)
                 sink_list.addItem(stream_item)
-                sink_list.setItemWidget(stream_item, widget)
+                sink_list.setItemWidget(stream_item, outer)
         # Outputs panel: per-item widget with inline set-default button for non-default sinks
         default_sink = self.get_default_sink_name()
         visible_sinks = [s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]
