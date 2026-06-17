@@ -1437,10 +1437,14 @@ class MainWindow(QMainWindow):
         ]
 
         if untagged:
-            mpris = self.get_mpris_browser_url()
-            if mpris:
-                # Tag only the first untagged stream; the rest on subsequent ticks
-                self.stream_url_cache[untagged[0]['index']] = mpris['url']
+            # Only tag when all untagged browser streams are from the same app.
+            # If Firefox and Brave are both untagged, we can't know which browser
+            # the MPRIS URL belongs to — skip until it's unambiguous.
+            untagged_apps = {s.get('app_name', '').lower() for s in untagged}
+            if len(untagged_apps) == 1:
+                mpris = self.get_mpris_browser_url()
+                if mpris:
+                    self.stream_url_cache[untagged[0]['index']] = mpris['url']
 
         # Attach cached URL to every stream dict for downstream use
         for s in sink_inputs:
