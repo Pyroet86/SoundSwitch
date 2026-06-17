@@ -1200,13 +1200,31 @@ class MainWindow(QMainWindow):
                     )
                     return
 
-        # Build a snapshot: sorted sinks, sorted streams, sorted input sources, default sink
+        # Refresh MPRIS metadata for browser streams every tick so that song/video
+        # title changes are detected even when nothing in PipeWire state changed.
+        browser_indices = {
+            s['index'] for s in sink_inputs
+            if s.get('app_name', '').lower() in BROWSER_APP_NAMES
+        }
+        if browser_indices:
+            mpris = self.get_mpris_browser_url()
+            if mpris:
+                mpris_domain = _url_domain(mpris['url'])
+                meta = {'title': mpris.get('title', ''), 'artist': mpris.get('artist', '')}
+                for idx in browser_indices:
+                    if _url_domain(self.stream_url_cache.get(idx, '')) == mpris_domain:
+                        self.stream_meta_cache[idx] = meta
+
+        # Build a snapshot: sorted sinks, sorted streams, sorted input sources, default sink,
+        # URL cache, and meta cache so title/artist changes trigger a display refresh.
         snapshot = (
             tuple(sorted((s['index'], s['name']) for s in sinks)),
             tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name')) for s in sink_inputs)),
             tuple(sorted(s['name'] for s in input_sources)),
             default_sink,
             tuple(sorted(self.stream_url_cache.items())),
+            tuple(sorted((k, v.get('title', ''), v.get('artist', ''))
+                         for k, v in self.stream_meta_cache.items())),
         )
         if snapshot != self._last_snapshot:
             self.refresh_devices_and_sinks(force=True)
