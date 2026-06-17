@@ -1430,7 +1430,12 @@ class MainWindow(QMainWindow):
         sinks_label.setFont(QFont('', 12, QFont.Bold))
         sinks_label.setStyleSheet('margin-bottom: 4px;')
         center_layout.addWidget(sinks_label)
-        center_layout.addSpacing(6)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet('background: #444; border: none;')
+        center_layout.addWidget(sep)
+        center_layout.addSpacing(4)
 
         self._splitter_center = StyledSplitter(Qt.Vertical)
         self.sink_lists = {}
