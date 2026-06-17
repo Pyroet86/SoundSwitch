@@ -1219,7 +1219,7 @@ class MainWindow(QMainWindow):
         # URL cache, and meta cache so title/artist changes trigger a display refresh.
         snapshot = (
             tuple(sorted((s['index'], s['name']) for s in sinks)),
-            tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name')) for s in sink_inputs)),
+            tuple(sorted((s['index'], s.get('sink'), s.get('app_name'), s.get('media_name'), s.get('muted')) for s in sink_inputs)),
             tuple(sorted(s['name'] for s in input_sources)),
             default_sink,
             tuple(sorted(self.stream_url_cache.items())),
@@ -1498,7 +1498,6 @@ class MainWindow(QMainWindow):
             s['artist'] = cached_meta.get('artist', '')
 
     def get_sink_inputs(self):
-        # Returns a list of dicts with 'index', 'name', 'app_name', 'sink'
         output = self.run_pactl(['list', 'sink-inputs'])
         inputs = []
         current = {}
@@ -1508,6 +1507,8 @@ class MainWindow(QMainWindow):
                 if current:
                     inputs.append(current)
                 current = {'index': line.split('#')[1].strip()}
+            elif line.startswith('Mute:'):
+                current['muted'] = line.split(':', 1)[1].strip() == 'yes'
             elif line.startswith('application.name = '):
                 current['app_name'] = line.split('=', 1)[1].strip().strip('"')
             elif line.startswith('media.name = '):
