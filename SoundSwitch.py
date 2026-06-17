@@ -276,6 +276,59 @@ class RuleItemDelegate(QStyledItemDelegate):
         return base.expandedTo(QtCore.QSize(base.width(), 36))
 
 
+class MuteButton(QPushButton):
+    def __init__(self, stream_index, muted, toggle_cb, parent=None):
+        super().__init__(parent)
+        self.stream_index = stream_index
+        self._muted = muted
+        self.setFixedSize(28, 28)
+        self.setFlat(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet('QPushButton { background: transparent; border: none; }'
+                           'QPushButton:hover { background: rgba(255,255,255,20); border-radius: 4px; }')
+        self.clicked.connect(lambda: toggle_cb(stream_index))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        ox, oy = 6, 6  # offset: centres 16×16 icon in 28×28 button
+
+        color = QColor('#f0f0f0')
+
+        # Speaker body — small rounded rectangle on the left
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(ox + 1, oy + 6, 3, 4, 1, 1)
+
+        # Speaker cone — trapezoid opening to the right
+        cone = QPainterPath()
+        cone.moveTo(ox + 4, oy + 6)
+        cone.lineTo(ox + 8, oy + 2)
+        cone.lineTo(ox + 8, oy + 14)
+        cone.lineTo(ox + 4, oy + 10)
+        cone.closeSubpath()
+        painter.fillPath(cone, QBrush(color))
+
+        if not self._muted:
+            # Two sound-wave arcs
+            painter.setBrush(Qt.NoBrush)
+            for radius, alpha in ((4, 220), (6, 150)):
+                wave = QColor('#f0f0f0')
+                wave.setAlpha(alpha)
+                painter.setPen(QPen(wave, 1.5, Qt.SolidLine, Qt.RoundCap))
+                cx, cy = ox + 8, oy + 8
+                painter.drawArc(cx - radius, cy - radius,
+                                radius * 2, radius * 2,
+                                -50 * 16, 100 * 16)
+        else:
+            # Red diagonal cross overlaid on the right side of the icon
+            painter.setPen(QPen(QColor('#ff4444'), 2, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(ox + 10, oy + 3, ox + 15, oy + 13)
+            painter.drawLine(ox + 10, oy + 13, ox + 15, oy + 3)
+
+        painter.end()
+
+
 class VolumeOSD(QWidget):
     """Non-focus-stealing on-screen display for volume changes."""
 
@@ -2138,6 +2191,10 @@ class MainWindow(QMainWindow):
             self.state.setdefault('url_routes', {})[domain] = sink_name
         self.save_state()
         self.show_status(f'Moved stream #{sink_input_index} to sink {sink_name}')
+        self.refresh_devices_and_sinks(force=True)
+
+    def toggle_stream_mute(self, stream_index):
+        self.run_pactl(['set-sink-input-mute', str(stream_index), 'toggle'])
         self.refresh_devices_and_sinks(force=True)
 
     def get_sink_volume(self, sink_name):
