@@ -2009,8 +2009,9 @@ class MainWindow(QMainWindow):
                 outer_layout.setSpacing(0)
 
                 card = QFrame()
+                card.setObjectName('sink_card')
                 card.setStyleSheet(
-                    f'QFrame {{ background: {bg}; border: 1px solid #444; border-radius: 8px; }}')
+                    f'#sink_card {{ background: {bg}; border: 1px solid #444; border-radius: 8px; }}')
                 row = QHBoxLayout(card)
                 row.setContentsMargins(8, 4, 4, 4)
                 row.setSpacing(4)
