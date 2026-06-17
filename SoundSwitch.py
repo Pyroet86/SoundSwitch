@@ -1987,9 +1987,11 @@ class MainWindow(QMainWindow):
                     enriched = media_name
                 main_label = enriched if enriched else app_label
                 sub_label = app_label if enriched else ''
+
+                bg = '#232629' if j % 2 == 0 else '#2d2f31'
+
                 stream_item = QListWidgetItem()
-                stream_item.setData(Qt.DisplayRole, main_label)
-                stream_item.setData(Qt.UserRole + 1, {'main': main_label, 'sub': sub_label})
+                stream_item.setSizeHint(QtCore.QSize(0, 52))
                 stream_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 tooltip_parts = [f"App: {stream.get('app_name', 'Unknown App')}"]
                 if url:
@@ -1999,12 +2001,35 @@ class MainWindow(QMainWindow):
                 elif not url:
                     tooltip_parts.append(f"Media: {media_name}")
                 stream_item.setToolTip('\n'.join(tooltip_parts))
-                # Dark alternating row colors
-                if j % 2 == 0:
-                    stream_item.setBackground(QBrush(QColor('#232629')))
-                else:
-                    stream_item.setBackground(QBrush(QColor('#2d2f31')))
+
+                widget = QWidget()
+                widget.setStyleSheet(f'background: {bg};')
+                row = QHBoxLayout(widget)
+                row.setContentsMargins(8, 4, 4, 4)
+                row.setSpacing(4)
+
+                text_col = QVBoxLayout()
+                text_col.setSpacing(2)
+                text_col.setContentsMargins(0, 0, 0, 0)
+
+                main_lbl = QLabel(main_label)
+                main_lbl.setStyleSheet('color: #f0f0f0; font-size: 10pt; background: transparent;')
+                main_lbl.setWordWrap(False)
+                text_col.addWidget(main_lbl)
+
+                if sub_label:
+                    sub_lbl = QLabel(sub_label)
+                    sub_lbl.setStyleSheet(
+                        'color: #b0b0b0; font-size: 8pt; font-style: italic; background: transparent;')
+                    sub_lbl.setWordWrap(False)
+                    text_col.addWidget(sub_lbl)
+
+                row.addLayout(text_col, 1)
+                row.addWidget(MuteButton(stream['index'], stream.get('muted', False),
+                                         self.toggle_stream_mute))
+
                 sink_list.addItem(stream_item)
+                sink_list.setItemWidget(stream_item, widget)
         # Outputs panel: per-item widget with inline set-default button for non-default sinks
         default_sink = self.get_default_sink_name()
         visible_sinks = [s for s in sinks if s['name'] not in self.hidden_sinks and not s['name'].startswith('rnnoise_')]
