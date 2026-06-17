@@ -328,6 +328,10 @@ class MuteButton(QPushButton):
 
         painter.end()
 
+    def set_muted(self, muted):
+        self._muted = muted
+        self.update()
+
 
 class SnapSlider(QSlider):
     _SNAP_TARGET = 100
@@ -1429,16 +1433,55 @@ class MainWindow(QMainWindow):
 
         self._splitter_center = StyledSplitter(Qt.Vertical)
         self.sink_lists = {}
+        self._sink_header_controls = {}
         for sink in CUSTOM_SINKS:
             pane = QWidget()
             pane_layout = QVBoxLayout(pane)
             pane_layout.setSpacing(6)
             pane_layout.setContentsMargins(0, 0, 0, 0)
-            label = QLabel(sink)
-            label.setAlignment(Qt.AlignCenter)
-            label.setFont(QFont('', 11, QFont.Bold))
-            label.setStyleSheet(f'margin: 0px; padding: 0px; color: {SINK_COLORS[sink]};')
-            pane_layout.addWidget(label)
+            header = QWidget()
+            header_layout = QHBoxLayout(header)
+            header_layout.setContentsMargins(4, 2, 4, 2)
+            header_layout.setSpacing(6)
+
+            name_lbl = QLabel(sink)
+            name_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            name_lbl.setFont(QFont('', 11, QFont.Bold))
+            name_lbl.setStyleSheet(
+                f'margin: 0px; padding: 0px; color: {SINK_COLORS[sink]}; background: transparent;')
+
+            sink_slider = SnapSlider(Qt.Horizontal)
+            sink_slider.setRange(0, 150)
+            sink_slider.setValue(100)
+            sink_slider.setFixedWidth(100)
+            sink_slider.setFixedHeight(28)
+            sink_slider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            sink_slider.setStyleSheet(
+                'QSlider { background: transparent; }'
+                'QSlider::groove:horizontal {'
+                '  background: #3a3a3a;'
+                '  height: 4px;'
+                '  border-radius: 2px;'
+                '}'
+                'QSlider::handle:horizontal {'
+                '  background: #4a9eff;'
+                '  width: 12px;'
+                '  height: 12px;'
+                '  margin: -4px 0;'
+                '  border-radius: 6px;'
+                '}'
+            )
+            sink_slider.valueChanged.connect(
+                lambda v, sn=sink: self.set_sink_volume_abs(sn, v))
+
+            sink_mute_btn = MuteButton(sink, False, self.toggle_sink_mute)
+
+            header_layout.addWidget(name_lbl, 1)
+            header_layout.addWidget(sink_slider)
+            header_layout.addWidget(sink_mute_btn)
+            pane_layout.addWidget(header)
+
+            self._sink_header_controls[sink] = (sink_slider, sink_mute_btn)
             sink_list = SinkDropListWidget(sink, self.move_sink_input)
             sink_list.setStyleSheet('QListWidget { margin: 0px; padding: 0px; border: none; }')
             pane.setMinimumHeight(80)
@@ -2020,6 +2063,14 @@ class MainWindow(QMainWindow):
         for sink_list in getattr(self, 'sink_lists', {}).values():
             sink_list.clear()
         sinks = self.get_sinks()
+        for s in sinks:
+            if s['name'] in self._sink_header_controls:
+                slider, btn = self._sink_header_controls[s['name']]
+                if not slider.isSliderDown():
+                    slider.blockSignals(True)
+                    slider.setValue(min(150, max(0, s.get('volume', 100))))
+                    slider.blockSignals(False)
+                btn.set_muted(s.get('muted', False))
         sink_inputs = self.get_sink_inputs()
         self.update_hidden_streams(sink_inputs)
         self.update_stream_urls(sink_inputs)
