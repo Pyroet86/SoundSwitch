@@ -2048,13 +2048,21 @@ class MainWindow(QMainWindow):
             bg = '#232629' if i % 2 == 0 else '#2d2f31'
 
             item = QListWidgetItem()
-            item.setSizeHint(QtCore.QSize(0, 40))
+            item.setSizeHint(QtCore.QSize(0, 48))
             item.setToolTip(f"Sink: {name}")
 
-            widget = QWidget()
-            widget.setStyleSheet(f'background: {bg};')
+            outer = QWidget()
+            outer.setStyleSheet('background: #181a1d;')
+            outer.setToolTip(f"Sink: {name}")
+            outer_layout = QVBoxLayout(outer)
+            outer_layout.setContentsMargins(3, 3, 3, 3)
+            outer_layout.setSpacing(0)
 
-            row = QHBoxLayout(widget)
+            card = QFrame()
+            card.setObjectName('output_card')
+            card.setStyleSheet(
+                f'#output_card {{ background: {bg}; border: 1px solid #444; border-radius: 8px; }}')
+            row = QHBoxLayout(card)
             row.setContentsMargins(8, 0, 8, 0)
             row.setSpacing(8)
 
@@ -2079,8 +2087,9 @@ class MainWindow(QMainWindow):
                 btn.clicked.connect(lambda checked, n=name: self.set_default_sink(n))
                 row.addWidget(btn)
 
+            outer_layout.addWidget(card)
             self.outputs_list.addItem(item)
-            self.outputs_list.setItemWidget(item, widget)
+            self.outputs_list.setItemWidget(item, outer)
         # Input Devices panel
         self.inputs_list.clear()
         input_sources = self.get_input_sources()
