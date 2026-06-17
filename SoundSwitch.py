@@ -2458,6 +2458,11 @@ class MainWindow(QMainWindow):
                 self.state.get('osd_position', 'bottom-right'),
                 self.state.get('osd_duration', 3),
             )
+            if sink_name in self._sink_header_controls:
+                slider, _ = self._sink_header_controls[sink_name]
+                slider.blockSignals(True)
+                slider.setValue(min(150, max(0, volume)))
+                slider.blockSignals(False)
 
     def _on_shortcut_activated(self, shortcut_id):
         parts = shortcut_id.rsplit('_', 1)
