@@ -1445,7 +1445,7 @@ class MainWindow(QMainWindow):
             header_layout.setSpacing(6)
 
             name_lbl = QLabel(sink)
-            name_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            name_lbl.setAlignment(Qt.AlignCenter)
             name_lbl.setFont(QFont('', 11, QFont.Bold))
             name_lbl.setStyleSheet(
                 f'margin: 0px; padding: 0px; color: {SINK_COLORS[sink]}; background: transparent;')
@@ -1476,6 +1476,10 @@ class MainWindow(QMainWindow):
 
             sink_mute_btn = MuteButton(sink, False, self.toggle_sink_mute)
 
+            left_spacer = QWidget()
+            left_spacer.setFixedWidth(134)  # slider(100) + spacing(6) + mute(28)
+            left_spacer.setStyleSheet('background: transparent;')
+            header_layout.addWidget(left_spacer)
             header_layout.addWidget(name_lbl, 1)
             header_layout.addWidget(sink_slider)
             header_layout.addWidget(sink_mute_btn)
