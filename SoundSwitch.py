@@ -10,7 +10,7 @@ import autostart
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QLabel, QPushButton, QListWidgetItem, QMessageBox,
-    QStyledItemDelegate, QStyle, QLineEdit,
+    QStyledItemDelegate, QStyle, QLineEdit, QSizePolicy,
     QComboBox, QMenu, QSystemTrayIcon, QAction, QDialog,
     QSpinBox, QCheckBox, QSplitter, QSplitterHandle, QSlider, QFrame,
 )
@@ -1561,6 +1561,12 @@ class MainWindow(QMainWindow):
                 current = {'index': line.split('#')[1].strip()}
             elif line.startswith('Mute:'):
                 current['muted'] = line.split(':', 1)[1].strip() == 'yes'
+            elif line.startswith('Volume:'):
+                try:
+                    pct_str = line.split('%')[0].split('/')[-1].strip()
+                    current['volume'] = min(150, max(0, int(pct_str)))
+                except (ValueError, IndexError):
+                    current['volume'] = 100
             elif line.startswith('application.name = '):
                 current['app_name'] = line.split('=', 1)[1].strip().strip('"')
             elif line.startswith('media.name = '):
@@ -1569,6 +1575,9 @@ class MainWindow(QMainWindow):
                 current['sink'] = line.split(':', 1)[1].strip()
         if current:
             inputs.append(current)
+        for inp in inputs:
+            if 'volume' not in inp:
+                inp['volume'] = 100
         return inputs
 
     def get_default_sink_name(self):
@@ -2239,6 +2248,9 @@ class MainWindow(QMainWindow):
     def toggle_stream_mute(self, stream_index):
         self.run_pactl(['set-sink-input-mute', str(stream_index), 'toggle'])
         self.refresh_devices_and_sinks(force=True)
+
+    def set_stream_volume(self, stream_index, percent):
+        self.run_pactl(['set-sink-input-volume', str(stream_index), f'{percent}%'])
 
     def get_sink_volume(self, sink_name):
         """Return current volume of a sink as an integer 0-100, or None on failure."""
