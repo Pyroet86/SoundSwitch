@@ -329,6 +329,62 @@ class MuteButton(QPushButton):
         painter.end()
 
 
+class StreamVolumeControl(QWidget):
+    def __init__(self, stream_index, volume_pct, muted, toggle_cb, set_volume_cb, parent=None):
+        super().__init__(parent)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._slider = QSlider(Qt.Horizontal)
+        self._slider.setRange(0, 150)
+        self._slider.setValue(volume_pct)
+        self._slider.setMaximumWidth(0)
+        self._slider.setFixedHeight(28)
+        self._slider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._slider.setStyleSheet(
+            'QSlider::groove:horizontal {'
+            '  background: #3a3a3a;'
+            '  height: 4px;'
+            '  border-radius: 2px;'
+            '}'
+            'QSlider::handle:horizontal {'
+            '  background: #4a9eff;'
+            '  width: 12px;'
+            '  height: 12px;'
+            '  margin: -4px 0;'
+            '  border-radius: 6px;'
+            '}'
+        )
+        self._slider.valueChanged.connect(lambda v: set_volume_cb(stream_index, v))
+
+        self._mute_btn = MuteButton(stream_index, muted, toggle_cb)
+
+        layout.addWidget(self._slider)
+        layout.addWidget(self._mute_btn)
+
+        self._anim = QPropertyAnimation(self._slider, b'maximumWidth')
+
+    def enterEvent(self, event):
+        self._anim.stop()
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.setStartValue(self._slider.maximumWidth())
+        self._anim.setEndValue(80)
+        self._anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._anim.stop()
+        self._anim.setDuration(100)
+        self._anim.setEasingCurve(QEasingCurve.InCubic)
+        self._anim.setStartValue(self._slider.maximumWidth())
+        self._anim.setEndValue(0)
+        self._anim.start()
+        super().leaveEvent(event)
+
+
 class VolumeOSD(QWidget):
     """Non-focus-stealing on-screen display for volume changes."""
 
