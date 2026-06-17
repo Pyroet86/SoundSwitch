@@ -2098,8 +2098,13 @@ class MainWindow(QMainWindow):
                     text_col.addWidget(sub_lbl)
 
                 row.addLayout(text_col, 1)
-                row.addWidget(MuteButton(stream['index'], stream.get('muted', False),
-                                         self.toggle_stream_mute))
+                row.addWidget(StreamVolumeControl(
+                    stream['index'],
+                    stream.get('volume', 100),
+                    stream.get('muted', False),
+                    self.toggle_stream_mute,
+                    self.set_stream_volume,
+                ))
 
                 outer_layout.addWidget(card)
                 sink_list.addItem(stream_item)
