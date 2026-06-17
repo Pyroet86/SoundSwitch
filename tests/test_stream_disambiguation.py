@@ -208,6 +208,34 @@ class TestUpdateStreamUrls(unittest.TestCase):
         self.assertEqual(self.obj.stream_url_cache.get('10'), 'https://www.youtube.com/')
         self.assertEqual(self.obj.stream_url_cache.get('20'), 'https://music.youtube.com/')
 
+    def test_untagged_firefox_not_tagged_when_brave_already_owns_mpris_domain(self):
+        # Exact user scenario: Brave plays YouTube Music (already tagged), Firefox
+        # video starts (only untagged stream). MPRIS still shows Brave's domain →
+        # Firefox must NOT receive that domain.
+        self.obj.stream_url_cache['20'] = 'https://music.youtube.com/'
+        streams = [
+            {'index': '10', 'app_name': 'Firefox', 'media_name': 'Playback'},
+            {'index': '20', 'app_name': 'Brave', 'media_name': 'Playback'},
+        ]
+        mpris = {'url': 'https://music.youtube.com/', 'title': ''}
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
+            self.obj.update_stream_urls(streams)
+        self.assertNotIn('10', self.obj.stream_url_cache)
+        self.assertEqual(self.obj.stream_url_cache.get('20'), 'https://music.youtube.com/')
+
+    def test_same_browser_reconnect_tagged_even_when_domain_already_cached(self):
+        # Brave stream '20' is tagged; Brave stream '30' is a reconnected stream from
+        # the same browser. MPRIS domain is already in cache but for same app → allow.
+        self.obj.stream_url_cache['20'] = 'https://music.youtube.com/'
+        streams = [
+            {'index': '20', 'app_name': 'Brave', 'media_name': 'Playback'},
+            {'index': '30', 'app_name': 'Brave', 'media_name': 'Playback'},
+        ]
+        mpris = {'url': 'https://music.youtube.com/', 'title': ''}
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
+            self.obj.update_stream_urls(streams)
+        self.assertEqual(self.obj.stream_url_cache.get('30'), 'https://music.youtube.com/')
+
 
 class TestUrlRoutesMatching(unittest.TestCase):
     def test_domain_extracted_from_full_url(self):

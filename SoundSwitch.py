@@ -1423,6 +1423,7 @@ class MainWindow(QMainWindow):
         refresh ticks will tag the remaining ones.
         """
         live_indices = {s['index'] for s in sink_inputs}
+        idx_to_app = {s['index']: s.get('app_name', '').lower() for s in sink_inputs}
 
         # Remove stale entries for streams that no longer exist
         for idx in list(self.stream_url_cache):
@@ -1444,7 +1445,20 @@ class MainWindow(QMainWindow):
             if len(untagged_apps) == 1:
                 mpris = self.get_mpris_browser_url()
                 if mpris:
-                    self.stream_url_cache[untagged[0]['index']] = mpris['url']
+                    mpris_domain = _url_domain(mpris['url'])
+                    first_app = untagged[0].get('app_name', '').lower()
+                    # Don't tag if this domain is already cached for a different
+                    # browser app — that means MPRIS is reflecting the other
+                    # browser (e.g. Brave playing music while Firefox just started).
+                    # Same-app is fine: a reconnected Brave stream may share a domain
+                    # with an already-tagged Brave stream.
+                    domain_owned_by_other = any(
+                        _url_domain(cached_url) == mpris_domain
+                        and idx_to_app.get(cached_idx, '') != first_app
+                        for cached_idx, cached_url in self.stream_url_cache.items()
+                    )
+                    if not domain_owned_by_other:
+                        self.stream_url_cache[untagged[0]['index']] = mpris['url']
 
         # Attach cached URL to every stream dict for downstream use
         for s in sink_inputs:
