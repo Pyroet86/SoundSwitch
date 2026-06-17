@@ -330,8 +330,12 @@ class MuteButton(QPushButton):
 
 
 class StreamVolumeControl(QWidget):
-    def __init__(self, stream_index, volume_pct, muted, toggle_cb, set_volume_cb, parent=None):
+    _SNAP_TARGET = 100
+    _SNAP_ZONE = 3
+
+    def __init__(self, stream_index, volume_pct, muted, toggle_cb, set_volume_cb, bg='#232629', parent=None):
         super().__init__(parent)
+        self.setStyleSheet(f'background: {bg};')
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -344,6 +348,7 @@ class StreamVolumeControl(QWidget):
         self._slider.setFixedHeight(28)
         self._slider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._slider.setStyleSheet(
+            f'QSlider {{ background: {bg}; }}'
             'QSlider::groove:horizontal {'
             '  background: #3a3a3a;'
             '  height: 4px;'
@@ -358,6 +363,7 @@ class StreamVolumeControl(QWidget):
             '}'
         )
         self._slider.valueChanged.connect(lambda v: set_volume_cb(stream_index, v))
+        self._slider.sliderMoved.connect(self._snap_check)
 
         self._mute_btn = MuteButton(stream_index, muted, toggle_cb)
 
@@ -365,6 +371,10 @@ class StreamVolumeControl(QWidget):
         layout.addWidget(self._mute_btn)
 
         self._anim = QPropertyAnimation(self._slider, b'maximumWidth')
+
+    def _snap_check(self, value):
+        if abs(value - self._SNAP_TARGET) <= self._SNAP_ZONE:
+            self._slider.setValue(self._SNAP_TARGET)
 
     def enterEvent(self, event):
         self._anim.stop()
@@ -2104,6 +2114,7 @@ class MainWindow(QMainWindow):
                     stream.get('muted', False),
                     self.toggle_stream_mute,
                     self.set_stream_volume,
+                    bg=bg,
                 ))
 
                 outer_layout.addWidget(card)
