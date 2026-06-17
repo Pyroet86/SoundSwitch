@@ -1346,7 +1346,6 @@ class MainWindow(QMainWindow):
             label.setStyleSheet(f'margin: 0px; padding: 0px; color: {SINK_COLORS[sink]};')
             pane_layout.addWidget(label)
             sink_list = SinkDropListWidget(sink, self.move_sink_input)
-            sink_list.setItemDelegate(RoundedBoxDelegate(padding=12))
             sink_list.setStyleSheet('QListWidget { margin: 0px; padding: 0px; border: none; }')
             pane.setMinimumHeight(80)
             sink_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -2004,6 +2003,7 @@ class MainWindow(QMainWindow):
 
                 widget = QWidget()
                 widget.setStyleSheet(f'background: {bg};')
+                widget.setToolTip('\n'.join(tooltip_parts))
                 row = QHBoxLayout(widget)
                 row.setContentsMargins(8, 4, 4, 4)
                 row.setSpacing(4)
