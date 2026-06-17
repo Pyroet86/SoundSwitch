@@ -1543,7 +1543,7 @@ class MainWindow(QMainWindow):
         return sources
 
     def get_sinks(self):
-        # Returns a list of dicts with 'index', 'name', 'description'
+        # Returns a list of dicts with 'index', 'name', 'description', 'muted', 'volume'
         output = self.run_pactl(['list', 'sinks'])
         sinks = []
         current = {}
@@ -1558,9 +1558,20 @@ class MainWindow(QMainWindow):
                 current['name'] = line.split(':', 1)[1].strip()
             elif line.startswith('Description:'):
                 current['description'] = line.split(':', 1)[1].strip()
+            elif line.startswith('Mute:'):
+                current['muted'] = line.split(':', 1)[1].strip() == 'yes'
+            elif line.startswith('Volume:'):
+                try:
+                    pct_str = line.split('%')[0].split('/')[-1].strip()
+                    current['volume'] = min(150, max(0, int(pct_str)))
+                except (ValueError, IndexError):
+                    current['volume'] = 100
         if current.get('name'):
             current.setdefault('description', current['name'])
             sinks.append(current)
+        for s in sinks:
+            s.setdefault('muted', False)
+            s.setdefault('volume', 100)
         return sinks
 
     def get_mpris_browser_url(self) -> dict | None:
@@ -2351,6 +2362,19 @@ class MainWindow(QMainWindow):
 
     def set_stream_volume(self, stream_index, percent):
         self.run_pactl(['set-sink-input-volume', str(stream_index), f'{percent}%'])
+
+    def toggle_sink_mute(self, sink_name):
+        self.run_pactl(['set-sink-mute', sink_name, 'toggle'])
+        self.refresh_devices_and_sinks(force=True)
+
+    def set_sink_volume_abs(self, sink_name, percent):
+        self.run_pactl(['set-sink-volume', sink_name, f'{percent}%'])
+        self._osd.show_volume(
+            sink_name,
+            percent,
+            self.state.get('osd_position', 'bottom-right'),
+            self.state.get('osd_duration', 3),
+        )
 
     def get_sink_volume(self, sink_name):
         """Return current volume of a sink as an integer 0-100, or None on failure."""
