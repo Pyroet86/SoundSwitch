@@ -171,7 +171,10 @@ class TestUpdateStreamUrls(unittest.TestCase):
         self.assertNotIn('42', self.obj.stream_url_cache)
         self.assertEqual(streams[0].get('url', ''), '')
 
-    def test_first_untagged_stream_gets_tagged_when_two_appear(self):
+    def test_newest_untagged_stream_gets_tagged_when_two_appear(self):
+        # When two same-browser streams are both untagged, tag the newest (highest
+        # index) — MPRIS reflects whichever tab the user just activated, not an
+        # older stream that was left untagged from a previous failed query.
         streams = [
             {'index': '10', 'app_name': 'Brave', 'media_name': 'Playback'},
             {'index': '20', 'app_name': 'Brave', 'media_name': 'Playback'},
@@ -179,8 +182,8 @@ class TestUpdateStreamUrls(unittest.TestCase):
         mpris = {'url': 'https://music.youtube.com/', 'title': ''}
         with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
             self.obj.update_stream_urls(streams)
-        self.assertEqual(self.obj.stream_url_cache.get('10'), 'https://music.youtube.com/')
-        self.assertNotIn('20', self.obj.stream_url_cache)
+        self.assertEqual(self.obj.stream_url_cache.get('20'), 'https://music.youtube.com/')
+        self.assertNotIn('10', self.obj.stream_url_cache)
 
     def test_mixed_browser_untagged_streams_not_tagged(self):
         # Firefox (untagged) + Brave (untagged): MPRIS URL belongs to Brave but we
@@ -223,9 +226,9 @@ class TestUpdateStreamUrls(unittest.TestCase):
         self.assertNotIn('10', self.obj.stream_url_cache)
         self.assertEqual(self.obj.stream_url_cache.get('20'), 'https://music.youtube.com/')
 
-    def test_same_browser_reconnect_tagged_even_when_domain_already_cached(self):
-        # Brave stream '20' is tagged; Brave stream '30' is a reconnected stream from
-        # the same browser. MPRIS domain is already in cache but for same app → allow.
+    def test_same_browser_second_stream_not_tagged_while_first_active(self):
+        # Brave '20' tagged as music.youtube.com; Brave '30' appears while '20' is
+        # still alive. MPRIS shows same domain → '30' NOT tagged (MPRIS is from '20').
         self.obj.stream_url_cache['20'] = 'https://music.youtube.com/'
         streams = [
             {'index': '20', 'app_name': 'Brave', 'media_name': 'Playback'},
@@ -234,7 +237,34 @@ class TestUpdateStreamUrls(unittest.TestCase):
         mpris = {'url': 'https://music.youtube.com/', 'title': ''}
         with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
             self.obj.update_stream_urls(streams)
+        self.assertNotIn('30', self.obj.stream_url_cache)
+
+    def test_same_browser_reconnect_tagged_when_old_stream_gone(self):
+        # True reconnect: stream '20' is gone (not in sink_inputs), so its cache
+        # entry is pruned. New stream '30' should then be tagged normally.
+        self.obj.stream_url_cache['20'] = 'https://music.youtube.com/'
+        streams = [  # '20' not present — it disconnected
+            {'index': '30', 'app_name': 'Brave', 'media_name': 'Playback'},
+        ]
+        mpris = {'url': 'https://music.youtube.com/', 'title': ''}
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
+            self.obj.update_stream_urls(streams)
         self.assertEqual(self.obj.stream_url_cache.get('30'), 'https://music.youtube.com/')
+
+    def test_youtube_music_not_tagged_when_twitch_already_owns_domain(self):
+        # Exact user scenario: Twitch ('20') was tagged in the previous tick.
+        # YouTube Music ('10') is still untagged. MPRIS still shows Twitch's domain
+        # → YouTube Music must NOT receive Twitch's URL.
+        self.obj.stream_url_cache['20'] = 'https://www.twitch.tv/channel'
+        streams = [
+            {'index': '10', 'app_name': 'Brave', 'media_name': 'Playback'},  # YouTube Music
+            {'index': '20', 'app_name': 'Brave', 'media_name': 'Playback'},  # Twitch
+        ]
+        mpris = {'url': 'https://www.twitch.tv/channel', 'title': ''}
+        with patch.object(self.obj, 'get_mpris_browser_url', return_value=mpris):
+            self.obj.update_stream_urls(streams)
+        self.assertNotIn('10', self.obj.stream_url_cache)
+        self.assertEqual(self.obj.stream_url_cache.get('20'), 'https://www.twitch.tv/channel')
 
 
 class TestUrlRoutesMatching(unittest.TestCase):

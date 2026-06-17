@@ -1418,12 +1418,11 @@ class MainWindow(QMainWindow):
     def update_stream_urls(self, sink_inputs: list) -> None:
         """Update stream_url_cache from MPRIS and attach 'url' key to each stream dict.
 
-        Queries MPRIS at most once per call, tagging the first untagged browser
-        stream found. If multiple browser streams are new simultaneously, subsequent
-        refresh ticks will tag the remaining ones.
+        Queries MPRIS at most once per call, tagging the most recently created
+        untagged browser stream (highest index). If the MPRIS domain is already
+        cached for any live stream, MPRIS is reflecting that stream — skip.
         """
         live_indices = {s['index'] for s in sink_inputs}
-        idx_to_app = {s['index']: s.get('app_name', '').lower() for s in sink_inputs}
 
         # Remove stale entries for streams that no longer exist
         for idx in list(self.stream_url_cache):
@@ -1438,27 +1437,24 @@ class MainWindow(QMainWindow):
         ]
 
         if untagged:
-            # Only tag when all untagged browser streams are from the same app.
-            # If Firefox and Brave are both untagged, we can't know which browser
-            # the MPRIS URL belongs to — skip until it's unambiguous.
+            # If untagged streams span multiple different browsers, we can't know
+            # which one the MPRIS URL belongs to — skip until unambiguous.
             untagged_apps = {s.get('app_name', '').lower() for s in untagged}
             if len(untagged_apps) == 1:
                 mpris = self.get_mpris_browser_url()
                 if mpris:
                     mpris_domain = _url_domain(mpris['url'])
-                    first_app = untagged[0].get('app_name', '').lower()
-                    # Don't tag if this domain is already cached for a different
-                    # browser app — that means MPRIS is reflecting the other
-                    # browser (e.g. Brave playing music while Firefox just started).
-                    # Same-app is fine: a reconnected Brave stream may share a domain
-                    # with an already-tagged Brave stream.
-                    domain_owned_by_other = any(
-                        _url_domain(cached_url) == mpris_domain
-                        and idx_to_app.get(cached_idx, '') != first_app
-                        for cached_idx, cached_url in self.stream_url_cache.items()
-                    )
-                    if not domain_owned_by_other:
-                        self.stream_url_cache[untagged[0]['index']] = mpris['url']
+                    # If the MPRIS domain is already cached for any live stream,
+                    # MPRIS is reflecting that known stream, not an untagged one.
+                    # Wait until the user focuses a different tab (domain changes).
+                    if not any(_url_domain(u) == mpris_domain
+                               for u in self.stream_url_cache.values()):
+                        # Tag the most recently created stream (highest index).
+                        # MPRIS reflects whichever tab the user just activated,
+                        # which is most likely the newest stream, not an older one
+                        # that was left untagged from a previous failed query.
+                        newest = max(untagged, key=lambda s: int(s['index']))
+                        self.stream_url_cache[newest['index']] = mpris['url']
 
         # Attach cached URL to every stream dict for downstream use
         for s in sink_inputs:
