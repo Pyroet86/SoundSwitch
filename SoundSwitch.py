@@ -1,5 +1,6 @@
 import sys
 import re
+import time
 import urllib.parse
 import threading
 import uuid
@@ -1207,6 +1208,7 @@ class MainWindow(QMainWindow):
         self._last_snapshot = None
         self.stream_url_cache: dict = {}    # stream_index (str) → full URL
         self.stream_meta_cache: dict = {}   # stream_index (str) → {'title': str, 'artist': str}
+        self._stream_first_seen: dict = {}  # stream_index (str) → float timestamp
         self.hidden_sinks = set(CUSTOM_SINKS)
         self.hidden_streams = set()  # Will be populated with loopback stream indices
         self.init_ui()
@@ -1662,12 +1664,20 @@ class MainWindow(QMainWindow):
         happens for newly untagged streams under the same disambiguation rules.
         """
         live_indices = {s['index'] for s in sink_inputs}
+        now = time.monotonic()
 
         # Remove stale entries for streams that no longer exist
         for idx in list(self.stream_url_cache):
             if idx not in live_indices:
                 del self.stream_url_cache[idx]
                 self.stream_meta_cache.pop(idx, None)
+        for idx in list(self._stream_first_seen):
+            if idx not in live_indices:
+                del self._stream_first_seen[idx]
+
+        # Record the first time each stream is observed
+        for s in sink_inputs:
+            self._stream_first_seen.setdefault(s['index'], now)
 
         browser_streams = [
             s for s in sink_inputs
@@ -1687,9 +1697,17 @@ class MainWindow(QMainWindow):
                             == mpris_domain):
                         self.stream_meta_cache[s['index']] = meta
 
-                # URL tagging for untagged streams
-                untagged = [s for s in browser_streams
-                            if s['index'] not in self.stream_url_cache]
+                # URL tagging for untagged streams.
+                # Only tag streams that appeared recently — this prevents long-running
+                # streams (e.g. Vesktop presenting as "chromium") from being
+                # retroactively attributed a URL when a previously-tagged stream
+                # disappears but MPRIS still reports the old URL.
+                _TAGGING_WINDOW = 5.0
+                untagged = [
+                    s for s in browser_streams
+                    if s['index'] not in self.stream_url_cache
+                    and now - self._stream_first_seen.get(s['index'], now) < _TAGGING_WINDOW
+                ]
                 if untagged:
                     untagged_apps = {s.get('app_name', '').lower() for s in untagged}
                     if len(untagged_apps) == 1:
